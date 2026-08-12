@@ -4,7 +4,7 @@ Kondre is een mobile-first Surinaamse community-app. Hij werkt direct als intera
 
 ## Online versie
 
-De productieversie staat op [https://adanielvv.github.io](https://adanielvv.github.io). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
+De productieversie staat op [https://adanielvv.github.io/kondre-sr/](https://adanielvv.github.io/kondre-sr/). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
 
 ## Wat werkt
 

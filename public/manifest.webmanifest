@@ -2,14 +2,16 @@
   "name": "Kondre — Samen in Suriname",
   "short_name": "Kondre",
   "description": "Een veilige Surinaamse community-app",
-  "start_url": "/",
+  "id": "/kondre-sr/",
+  "start_url": "/kondre-sr/",
+  "scope": "/kondre-sr/",
   "display": "standalone",
   "background_color": "#f8f3f4",
   "theme_color": "#c6283d",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/kondre-sr/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/kondre-sr/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/kondre-sr/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
