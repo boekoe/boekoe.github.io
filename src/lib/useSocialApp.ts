@@ -99,7 +99,14 @@ export function useSocialApp() {
     setBusy(true); setError('')
     const result = mode === 'login'
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, username } } })
+      : await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+            data: { full_name: fullName, username },
+          },
+        })
     setBusy(false)
     if (result.error) { setError(result.error.message); return { ok: false, message: result.error.message } }
     return { ok: true, message: mode === 'signup' && !result.data.session ? 'Controleer je e-mail om je account te bevestigen.' : '' }
