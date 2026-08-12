@@ -4,7 +4,7 @@ import type { Notice, Post, Profile, Report } from '../types'
 import { demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
 
-const STORAGE_KEY = 'kondre-demo-v1'
+const STORAGE_KEY = 'boekoe-demo-v1'
 
 type DemoState = { posts: Post[]; following: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
 
@@ -18,7 +18,7 @@ function readDemo(): DemoState {
 }
 
 const rowProfile = (row: any): Profile => ({
-  id: row.id, username: row.username || 'gebruiker', fullName: row.full_name || row.username || 'Kondre-gebruiker',
+  id: row.id, username: row.username || 'gebruiker', fullName: row.full_name || row.username || 'Boekoe-gebruiker',
   bio: row.bio || '', location: row.location || 'Suriname', avatarUrl: row.avatar_url || '', coverUrl: row.cover_url || '',
   verified: Boolean(row.verified), isAdmin: Boolean(row.is_admin), followers: row.followers_count || 0, following: row.following_count || 0,
 })
@@ -90,7 +90,7 @@ export function useSocialApp() {
   useEffect(() => {
     if (!supabase || !session) return
     const client = supabase
-    const channel = client.channel('kondre-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => loadOnline(session)).subscribe()
+    const channel = client.channel('boekoe-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => loadOnline(session)).subscribe()
     return () => { client.removeChannel(channel) }
   }, [session, loadOnline])
 

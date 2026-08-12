@@ -1,4 +1,4 @@
--- Kondre database schema for Supabase
+-- Boekoe database schema for Supabase
 -- Run this entire file once in Supabase > SQL Editor.
 
 create extension if not exists pgcrypto;
@@ -100,7 +100,7 @@ begin
   if char_length(requested_username) < 3 then requested_username := 'user_' || substr(new.id::text, 1, 8); end if;
   if exists (select 1 from public.profiles where username = requested_username) then requested_username := requested_username || '_' || substr(new.id::text, 1, 5); end if;
   insert into public.profiles (id, username, full_name)
-  values (new.id, requested_username, left(coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Kondre gebruiker'), 80));
+  values (new.id, requested_username, left(coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Boekoe gebruiker'), 80));
   return new;
 end;
 $$;

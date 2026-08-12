@@ -12,7 +12,7 @@ export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: st
     setMessage(result.message)
   }
   return <main className="auth-shell">
-    <section className="auth-brand"><div className="brand-mark large">K</div><h1>Kondre</h1><p>Samen praten. Samen ontdekken.<br />Samen Suriname.</p><div className="flag-stripe" /></section>
+    <section className="auth-brand"><div className="brand-mark large">B</div><h1>Boekoe</h1><p>Samen praten. Samen ontdekken.<br />Samen Suriname.</p><div className="flag-stripe" /></section>
     <section className="auth-panel"><div className="auth-card">
       <div className="auth-tabs"><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Inloggen</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Account maken</button></div>
       <form onSubmit={submit} autoComplete="on">
@@ -22,7 +22,7 @@ export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: st
         {(error || message) && <p className={error ? 'form-error' : 'form-success'}>{error || message}</p>}
         <button className="primary wide" disabled={busy}>{busy && <LoaderCircle className="spin" />} {mode === 'login' ? 'Inloggen' : 'Gratis account maken'}</button>
       </form>
-      <p className="terms">Door verder te gaan accepteer je de communityregels en privacyvoorwaarden van Kondre.</p>
+      <p className="terms">Door verder te gaan accepteer je de communityregels en privacyvoorwaarden van Boekoe.</p>
     </div></section>
   </main>
 }

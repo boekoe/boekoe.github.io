@@ -64,9 +64,9 @@ function Suggestions({ profiles, currentId, following, onFollow }: { profiles: P
       {profiles.filter((item) => item.id !== currentId).slice(0, 4).map((person) => <div className="suggestion" key={person.id}><Avatar profile={person} size={39} /><div><Name profile={person} /><small>@{person.username}</small></div><button className={following.includes(person.id) ? 'follow active' : 'follow'} onClick={() => onFollow(person.id)}>{following.includes(person.id) ? <Check size={16} /> : <Plus size={16} />}</button></div>)}
     </section>
     <section className="rail-card trends"><div className="rail-title"><h3>Populair in Suriname</h3><Sparkles size={18} /></div>
-      {[['#KondrePraat', '1,2K berichten'], ['#Paramaribo', '865 berichten'], ['Suriname', '642 berichten'], ['#EigenBodem', '391 berichten']].map(([topic, count]) => <button key={topic}><span>{topic}</span><small>{count}</small></button>)}
+      {[['#BoekoePraat', '1,2K berichten'], ['#Paramaribo', '865 berichten'], ['Suriname', '642 berichten'], ['#EigenBodem', '391 berichten']].map(([topic, count]) => <button key={topic}><span>{topic}</span><small>{count}</small></button>)}
     </section>
-    <p className="rail-footer">Communityregels · Privacy · Over Kondre<br />© 2026 Kondre</p>
+    <p className="rail-footer">Communityregels · Privacy · Over Boekoe<br />© 2026 Boekoe</p>
   </aside>
 }
 
@@ -110,15 +110,15 @@ function Moderation({ reports, onUpdate }: { reports: ReturnType<typeof useSocia
 export default function App() {
   const store = useSocialApp()
   const [view, setView] = useState<AppView>('feed')
-  const [dark, setDark] = useState(() => localStorage.getItem('kondre-theme') === 'dark')
+  const [dark, setDark] = useState(() => localStorage.getItem('boekoe-theme') === 'dark')
   const [toast, setToast] = useState('')
   const [editing, setEditing] = useState(false)
   const [mobileMenu, setMobileMenu] = useState(false)
-  useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kondre-theme', dark ? 'dark' : 'light') }, [dark])
+  useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('boekoe-theme', dark ? 'dark' : 'light') }, [dark])
   const unread = store.notices.filter((notice) => !notice.read).length
   const feed = useMemo(() => [...store.posts].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)), [store.posts])
 
-  if (!store.authReady) return <div className="loading-screen"><div className="brand-mark large">K</div><LoaderCircle className="spin" /></div>
+  if (!store.authReady) return <div className="loading-screen"><div className="brand-mark large">B</div><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
@@ -126,7 +126,7 @@ export default function App() {
   const post = async (body: string, file: File | null, visibility: 'public' | 'followers') => { const ok = await store.createPost(body, file, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
 
   return <div className="app-shell">
-    <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><span className="brand-mark">K</span><strong>Kondre</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Kondre</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
+    <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><span className="brand-mark">B</span><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
     <div className="layout">
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}><div className="mobile-sidebar-head"><span>Menu</span><button className="icon-button" onClick={() => setMobileMenu(false)}><X /></button></div>
         <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}</nav>
@@ -134,7 +134,7 @@ export default function App() {
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
       <main className="content">
-        {view === 'feed' && <div className="page-stack"><div className="feed-intro"><div><h1>Goedemorgen, {profile.fullName.split(' ')[0]} 👋</h1><p>Dit speelt er vandaag in je kondre.</p></div></div><Compose profile={profile} busy={store.busy} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} currentUserId={profile.id} onLike={() => store.toggleLike(item.id)} onComment={(body) => store.addComment(item.id, body)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => store.blockUser(item.author.id)} onToast={setToast} />)}</div>}
+        {view === 'feed' && <div className="page-stack"><div className="feed-intro"><div><h1>Goedemorgen, {profile.fullName.split(' ')[0]} 👋</h1><p>Dit speelt er vandaag in je community.</p></div></div><Compose profile={profile} busy={store.busy} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} currentUserId={profile.id} onLike={() => store.toggleLike(item.id)} onComment={(body) => store.addComment(item.id, body)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => store.blockUser(item.author.id)} onToast={setToast} />)}</div>}
         {view === 'compose' && <div className="page-stack"><div className="simple-title"><h1>Nieuw bericht</h1><p>Deel iets met je community</p></div><Compose profile={profile} busy={store.busy} autofocus onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} onFollow={store.toggleFollow} />}
         {view === 'notifications' && <Notifications notices={store.notices} onRead={store.markNoticesRead} />}

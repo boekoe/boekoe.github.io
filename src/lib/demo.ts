@@ -50,7 +50,7 @@ export const demoNotices: Notice[] = [
   { id: 'n1', kind: 'follow', actor: people[5], text: 'is je gaan volgen', createdAt: new Date(Date.now() - 18 * 60_000).toISOString(), read: false },
   { id: 'n2', kind: 'like', actor: people[1], text: 'vindt je bericht leuk', createdAt: new Date(Date.now() - 75 * 60_000).toISOString(), read: false },
   { id: 'n3', kind: 'comment', actor: people[4], text: 'reageerde: “Dit moeten we vaker doen!”', createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(), read: true },
-  { id: 'n4', kind: 'system', text: 'Welkom bij Kondre. Samen houden we het veilig en gezellig.', createdAt: new Date(Date.now() - 26 * 3_600_000).toISOString(), read: true },
+  { id: 'n4', kind: 'system', text: 'Welkom bij Boekoe. Samen houden we het veilig en gezellig.', createdAt: new Date(Date.now() - 26 * 3_600_000).toISOString(), read: true },
 ]
 
 export const demoReports: Report[] = [

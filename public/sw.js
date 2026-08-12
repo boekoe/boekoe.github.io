@@ -1,5 +1,5 @@
-const CACHE = 'kondre-v3-sr'
-const BASE = '/kondre-sr/'
+const CACHE = 'boekoe-v1'
+const BASE = '/'
 const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`]
 
 self.addEventListener('install', (event) => {

@@ -1,10 +1,10 @@
-# Kondre
+# Boekoe
 
-Kondre is een mobile-first Surinaamse community-app. Hij werkt direct als interactieve demo en kan met een gratis Supabase-project als echte multi-user PWA draaien.
+Boekoe is een mobile-first Surinaamse community-app. Hij werkt direct als interactieve demo en kan met een gratis Supabase-project als echte multi-user PWA draaien.
 
 ## Online versie
 
-De productieversie staat op [https://adanielvv.github.io/kondre-sr/](https://adanielvv.github.io/kondre-sr/). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
+De productieversie staat op [https://boekoe.github.io/](https://boekoe.github.io/). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
 
 ## Wat werkt
 
@@ -26,7 +26,7 @@ npm install
 npm run dev
 ```
 
-Open daarna de URL die Vite toont. Zonder `.env` draait Kondre automatisch in demomodus.
+Open daarna de URL die Vite toont. Zonder `.env` draait Boekoe automatisch in demomodus.
 
 ## Echte accounts en gedeelde data activeren
 
