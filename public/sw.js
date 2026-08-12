@@ -1,4 +1,4 @@
-const CACHE = 'kondre-v1'
+const CACHE = 'kondre-v2-red'
 const SHELL = ['/', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (event) => {
