@@ -192,7 +192,7 @@ export function useSocialApp() {
     if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile).filter((person) => !blockedIds.includes(person.id)))
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
-    if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
+    if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
     if (profileRes.data?.is_admin) {
       const reportsRes = await supabase.from('reports').select('*').order('created_at', { ascending: false })
       if (reportsRes.data) setReports(reportsRes.data.map((row: any) => ({ id: row.id, reporter: row.reporter_name || 'Gebruiker', reason: row.reason, postId: row.post_id, excerpt: row.details || '', status: row.status, createdAt: row.created_at })))

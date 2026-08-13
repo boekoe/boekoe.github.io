@@ -255,6 +255,10 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .page-title p { margin: 0; color: var(--muted); }
 .notice-list { margin: 2px -10px -6px; }
 .notice { position: relative; display: flex; gap: 12px; align-items: center; padding: 15px 11px; border-bottom: 1px solid var(--line); }
+.notice.linked { padding-right: 38px; cursor: pointer; }
+.notice.linked:hover { background: var(--surface-2); }
+.notice.linked:focus-visible { outline: 3px solid rgba(198,40,61,.24); outline-offset: -3px; }
+.notice-arrow { position: absolute; right: 10px; width: 19px; color: var(--muted); }
 .notice:last-child { border: 0; }
 .notice.unread { background: color-mix(in srgb, var(--green-soft) 45%, transparent); }
 .notice > div { flex: 1; font-size: 14px; }
