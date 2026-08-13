@@ -1,43 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#c6283d"/>
 
-  <!-- Pixel cow: every feature sits on a simple square grid. -->
-  <g>
-    <!-- Horns -->
-    <rect x="112" y="80" width="32" height="32" fill="#f4c542"/>
-    <rect x="128" y="96" width="32" height="48" fill="#f4c542"/>
-    <rect x="368" y="80" width="32" height="32" fill="#f4c542"/>
-    <rect x="352" y="96" width="32" height="48" fill="#f4c542"/>
-
-    <!-- Ears -->
-    <rect x="64" y="160" width="96" height="64" fill="#ffffff"/>
-    <rect x="80" y="176" width="64" height="32" fill="#ef9dad"/>
-    <rect x="352" y="160" width="96" height="64" fill="#ffffff"/>
-    <rect x="368" y="176" width="64" height="32" fill="#ef9dad"/>
-
-    <!-- Head silhouette -->
-    <rect x="160" y="112" width="192" height="32" fill="#ffffff"/>
-    <rect x="128" y="144" width="256" height="176" fill="#ffffff"/>
-    <rect x="144" y="320" width="224" height="64" fill="#ffffff"/>
-    <rect x="176" y="384" width="160" height="32" fill="#ffffff"/>
-
-    <!-- Cow patches -->
-    <rect x="128" y="144" width="96" height="64" fill="#252328"/>
-    <rect x="144" y="208" width="48" height="32" fill="#252328"/>
-    <rect x="304" y="112" width="48" height="32" fill="#252328"/>
-    <rect x="320" y="144" width="64" height="64" fill="#252328"/>
-
-    <!-- Eyes -->
-    <rect x="184" y="224" width="32" height="32" fill="#252328"/>
-    <rect x="296" y="224" width="32" height="32" fill="#252328"/>
-    <rect x="192" y="224" width="8" height="8" fill="#ffffff"/>
-    <rect x="304" y="224" width="8" height="8" fill="#ffffff"/>
-
-    <!-- Muzzle -->
-    <rect x="160" y="288" width="192" height="80" fill="#ef9dad"/>
-    <rect x="176" y="272" width="160" height="16" fill="#ef9dad"/>
-    <rect x="192" y="320" width="32" height="24" fill="#7e2738"/>
-    <rect x="288" y="320" width="32" height="24" fill="#7e2738"/>
-    <rect x="224" y="368" width="64" height="16" fill="#7e2738"/>
+  <!-- A deliberately simple cow mark: readable even as a tiny favicon. -->
+  <g fill="#fff">
+    <path d="M129 181c-28-23-63-22-77 2-13 23 4 54 34 66 19 8 39 6 54-5z"/>
+    <path d="M383 181c28-23 63-22 77 2 13 23-4 54-34 66-19 8-39 6-54-5z"/>
+    <rect x="116" y="116" width="280" height="292" rx="88"/>
   </g>
+
+  <!-- Small horns keep the abstract face unmistakably bovine. -->
+  <path d="M153 142c-27-16-37-45-24-67 22 4 41 24 43 53z" fill="#f4d19a"/>
+  <path d="M359 142c27-16 37-45 24-67-22 4-41 24-43 53z" fill="#f4d19a"/>
+
+  <!-- Two-colour facial details echo the supplied minimal reference. -->
+  <path d="M116 176c26-30 70-39 104-18-5 42-31 68-73 72-14-13-25-31-31-54z" fill="#c6283d"/>
+  <path d="M396 176c-26-30-70-39-104-18 5 42 31 68 73 72 14-13 25-31 31-54z" fill="#c6283d"/>
+  <circle cx="186" cy="245" r="15" fill="#2a1820"/>
+  <circle cx="326" cy="245" r="15" fill="#2a1820"/>
+
+  <rect x="157" y="282" width="198" height="91" rx="45.5" fill="#f2a4b1"/>
+  <circle cx="214" cy="328" r="18" fill="#c6283d"/>
+  <circle cx="298" cy="328" r="18" fill="#c6283d"/>
 </svg>
