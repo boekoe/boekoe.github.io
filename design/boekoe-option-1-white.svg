@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Boekoe optie 1 wit</title>
+  <desc>Een wit afgerond icoon met twee rode ronde ogen.</desc>
+  <rect width="512" height="512" fill="#fff"/>
+  <circle cx="202" cy="256" r="44" fill="#c6283d"/>
+  <circle cx="310" cy="256" r="44" fill="#c6283d"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="700" viewBox="0 0 900 700">
+  <title>Preview Boekoe optie 1 wit</title>
+  <desc>Voorbeeld van het witte Boekoe-icoon met twee rode balletjes.</desc>
+  <rect width="900" height="700" fill="#eeeae6"/>
+  <text x="450" y="72" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#231f20">Optie 1 · aangepast</text>
+  <text x="450" y="110" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6b6460">wit icoon • twee rode balletjes</text>
+  <g transform="translate(230 150)">
+    <rect width="440" height="440" rx="96" fill="#fff"/>
+    <circle cx="174" cy="220" r="38" fill="#c6283d"/>
+    <circle cx="266" cy="220" r="38" fill="#c6283d"/>
+  </g>
+  <text x="450" y="648" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#6b6460">De grijze achtergrond is alleen om het witte icoon zichtbaar te maken.</text>
+</svg>
