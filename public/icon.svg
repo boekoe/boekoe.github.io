@@ -1,24 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="118" fill="#c6283d"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="crispEdges">
+  <rect width="512" height="512" rx="112" fill="#c6283d"/>
 
-  <!-- Horns and ears sit behind the head. -->
-  <path d="M184 154c-31-10-58-38-65-74 36 7 68 33 79 64z" fill="#f4c542"/>
-  <path d="M328 154c31-10 58-38 65-74-36 7-68 33-79 64z" fill="#f4c542"/>
-  <ellipse cx="145" cy="192" rx="69" ry="39" transform="rotate(-18 145 192)" fill="#fff"/>
-  <ellipse cx="367" cy="192" rx="69" ry="39" transform="rotate(18 367 192)" fill="#fff"/>
-  <ellipse cx="139" cy="194" rx="39" ry="18" transform="rotate(-18 139 194)" fill="#ee91a3"/>
-  <ellipse cx="373" cy="194" rx="39" ry="18" transform="rotate(18 373 194)" fill="#ee91a3"/>
+  <!-- Pixel cow: every feature sits on a simple square grid. -->
+  <g>
+    <!-- Horns -->
+    <rect x="112" y="80" width="32" height="32" fill="#f4c542"/>
+    <rect x="128" y="96" width="32" height="48" fill="#f4c542"/>
+    <rect x="368" y="80" width="32" height="32" fill="#f4c542"/>
+    <rect x="352" y="96" width="32" height="48" fill="#f4c542"/>
 
-  <!-- Friendly cow face. -->
-  <path d="M154 167c0-56 43-91 102-91s102 35 102 91v112c0 92-39 156-102 156s-102-64-102-156z" fill="#fff"/>
-  <path d="M158 165c7-50 39-80 83-87 7 42-13 82-52 105-11 7-22 3-31-18z" fill="#252328"/>
-  <path d="M326 112c25 14 37 40 32 77-34-1-57-15-67-44-5-15 12-45 35-33z" fill="#252328"/>
-  <ellipse cx="213" cy="235" rx="15" ry="20" fill="#252328"/>
-  <ellipse cx="299" cy="235" rx="15" ry="20" fill="#252328"/>
-  <circle cx="208" cy="229" r="5" fill="#fff"/>
-  <circle cx="294" cy="229" r="5" fill="#fff"/>
-  <ellipse cx="256" cy="334" rx="82" ry="62" fill="#ef9dad"/>
-  <ellipse cx="221" cy="334" rx="12" ry="16" fill="#7e2738"/>
-  <ellipse cx="291" cy="334" rx="12" ry="16" fill="#7e2738"/>
-  <path d="M232 374c14 11 34 11 48 0" fill="none" stroke="#7e2738" stroke-width="10" stroke-linecap="round"/>
+    <!-- Ears -->
+    <rect x="64" y="160" width="96" height="64" fill="#ffffff"/>
+    <rect x="80" y="176" width="64" height="32" fill="#ef9dad"/>
+    <rect x="352" y="160" width="96" height="64" fill="#ffffff"/>
+    <rect x="368" y="176" width="64" height="32" fill="#ef9dad"/>
+
+    <!-- Head silhouette -->
+    <rect x="160" y="112" width="192" height="32" fill="#ffffff"/>
+    <rect x="128" y="144" width="256" height="176" fill="#ffffff"/>
+    <rect x="144" y="320" width="224" height="64" fill="#ffffff"/>
+    <rect x="176" y="384" width="160" height="32" fill="#ffffff"/>
+
+    <!-- Cow patches -->
+    <rect x="128" y="144" width="96" height="64" fill="#252328"/>
+    <rect x="144" y="208" width="48" height="32" fill="#252328"/>
+    <rect x="304" y="112" width="48" height="32" fill="#252328"/>
+    <rect x="320" y="144" width="64" height="64" fill="#252328"/>
+
+    <!-- Eyes -->
+    <rect x="184" y="224" width="32" height="32" fill="#252328"/>
+    <rect x="296" y="224" width="32" height="32" fill="#252328"/>
+    <rect x="192" y="224" width="8" height="8" fill="#ffffff"/>
+    <rect x="304" y="224" width="8" height="8" fill="#ffffff"/>
+
+    <!-- Muzzle -->
+    <rect x="160" y="288" width="192" height="80" fill="#ef9dad"/>
+    <rect x="176" y="272" width="160" height="16" fill="#ef9dad"/>
+    <rect x="192" y="320" width="32" height="24" fill="#7e2738"/>
+    <rect x="288" y="320" width="32" height="24" fill="#7e2738"/>
+    <rect x="224" y="368" width="64" height="16" fill="#7e2738"/>
+  </g>
 </svg>
