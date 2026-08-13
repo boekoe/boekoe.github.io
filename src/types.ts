@@ -25,10 +25,19 @@ export type Post = {
   body: string
   imageUrl?: string
   createdAt: string
+  updatedAt?: string
   likes: number
   liked: boolean
+  likedBy: string[]
+  revisions: PostRevision[]
   comments: Comment[]
   visibility: 'public' | 'followers'
+}
+
+export type PostRevision = {
+  id: string
+  body: string
+  createdAt: string
 }
 
 export type Notice = {

@@ -44,6 +44,28 @@ create table if not exists public.likes (
   primary key (post_id, user_id)
 );
 
+create table if not exists public.post_versions (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  body text not null check (char_length(body) <= 2000),
+  created_at timestamptz not null default now()
+);
+
+-- Preserve the old text automatically so edit history cannot be forged by the browser.
+create or replace function public.capture_post_version()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if old.body is distinct from new.body then
+    insert into post_versions (post_id, body) values (old.id, old.body);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_capture_version on public.posts;
+create trigger posts_capture_version before update of body on public.posts for each row execute procedure public.capture_post_version();
+
 create table if not exists public.follows (
   follower_id uuid not null references public.profiles(id) on delete cascade,
   following_id uuid not null references public.profiles(id) on delete cascade,
@@ -85,6 +107,7 @@ create table if not exists public.notifications (
 
 create index if not exists posts_created_at_idx on public.posts(created_at desc);
 create index if not exists posts_user_id_idx on public.posts(user_id);
+create index if not exists post_versions_post_id_idx on public.post_versions(post_id, created_at desc);
 create index if not exists comments_post_id_idx on public.comments(post_id, created_at);
 create index if not exists notifications_user_id_idx on public.notifications(user_id, created_at desc);
 create index if not exists reports_status_idx on public.reports(status, created_at desc);
@@ -158,6 +181,7 @@ alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
 alter table public.comments enable row level security;
 alter table public.likes enable row level security;
+alter table public.post_versions enable row level security;
 alter table public.follows enable row level security;
 alter table public.blocks enable row level security;
 alter table public.reports enable row level security;
@@ -185,6 +209,10 @@ create policy "Authors delete comments" on public.comments for delete to authent
 create policy "Likes are readable" on public.likes for select to authenticated using (true);
 create policy "Users create likes" on public.likes for insert to authenticated with check (user_id = auth.uid());
 create policy "Users remove likes" on public.likes for delete to authenticated using (user_id = auth.uid());
+
+create policy "Versions follow post visibility" on public.post_versions for select to authenticated using (
+  exists (select 1 from public.posts p where p.id = post_versions.post_id)
+);
 
 create policy "Follows are readable" on public.follows for select to authenticated using (true);
 create policy "Users create follows" on public.follows for insert to authenticated with check (follower_id = auth.uid());

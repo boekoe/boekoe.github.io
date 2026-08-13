@@ -1,20 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import type { Notice, Post, Profile, Report } from '../types'
+import type { Notice, Post, PostRevision, Profile, Report } from '../types'
 import { demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
+const REVISION_STORAGE_KEY = 'boekoe-post-revisions-v1'
 
 type DemoState = { posts: Post[]; following: string[]; followers: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
 type ProfileMedia = { avatar?: File | null; cover?: File | null }
 
 const demoDefaults: DemoState = { posts: demoPosts, following: ['p1', 'p4'], followers: ['p1', 'p5'], notices: demoNotices, reports: demoReports, profile: demoUser }
 
+function readLocalRevisions(): Record<string, PostRevision[]> {
+  try { return JSON.parse(localStorage.getItem(REVISION_STORAGE_KEY) || '{}') } catch { return {} }
+}
+
+function writeLocalRevisions(value: Record<string, PostRevision[]>) {
+  localStorage.setItem(REVISION_STORAGE_KEY, JSON.stringify(value))
+}
+
+function normalizePost(post: Post): Post {
+  return { ...post, likedBy: post.likedBy || [], revisions: post.revisions || [] }
+}
+
 function readDemo(): DemoState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? { ...demoDefaults, ...JSON.parse(saved) } : demoDefaults
+    if (!saved) return demoDefaults
+    const parsed = JSON.parse(saved)
+    return { ...demoDefaults, ...parsed, posts: (parsed.posts || demoPosts).map(normalizePost) }
   } catch {
     return demoDefaults
   }
@@ -26,10 +41,11 @@ const rowProfile = (row: any): Profile => ({
   verified: Boolean(row.verified), isAdmin: Boolean(row.is_admin), followers: row.followers_count || 0, following: row.following_count || 0,
 })
 
-const rowPost = (row: any, userId: string): Post => ({
+const rowPost = (row: any, userId: string, revisions: PostRevision[] = []): Post => ({
   id: row.id, author: rowProfile(row.author), body: row.body, imageUrl: row.image_url || undefined,
-  createdAt: row.created_at, visibility: row.visibility || 'public', likes: row.likes?.length || 0,
+  createdAt: row.created_at, updatedAt: row.updated_at, visibility: row.visibility || 'public', likes: row.likes?.length || 0,
   liked: Boolean(row.likes?.some((like: any) => like.user_id === userId)),
+  likedBy: (row.likes || []).map((like: any) => like.user_id), revisions,
   comments: (row.comments || []).map((comment: any) => ({ id: comment.id, author: rowProfile(comment.author), body: comment.body, createdAt: comment.created_at })),
 })
 
@@ -73,7 +89,19 @@ export function useSocialApp() {
       supabase.from('notifications').select('*, actor:profiles!notifications_actor_id_fkey(*)').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
     ])
     if (profileRes.data) setProfile(rowProfile(profileRes.data))
-    if (feedRes.data) setPosts(feedRes.data.map((row: any) => rowPost(row, userId)))
+    if (feedRes.data) {
+      const localRevisions = readLocalRevisions()
+      const postIds = feedRes.data.map((row: any) => row.id)
+      let serverRevisions: Record<string, PostRevision[]> = {}
+      if (postIds.length) {
+        const revisionsRes = await supabase.from('post_versions').select('id, post_id, body, created_at').in('post_id', postIds).order('created_at', { ascending: false })
+        if (revisionsRes.data) serverRevisions = revisionsRes.data.reduce((all: Record<string, PostRevision[]>, row: any) => {
+          all[row.post_id] = [...(all[row.post_id] || []), { id: row.id, body: row.body, createdAt: row.created_at }]
+          return all
+        }, {})
+      }
+      setPosts(feedRes.data.map((row: any) => rowPost(row, userId, serverRevisions[row.id] || localRevisions[row.id] || [])))
+    }
     if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile))
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
@@ -146,7 +174,7 @@ export function useSocialApp() {
     }
     let imageUrl: string | undefined
     if (image) imageUrl = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(image) })
-    const post: Post = { id: crypto.randomUUID(), author: profile, body: body.trim(), imageUrl, createdAt: new Date().toISOString(), likes: 0, liked: false, comments: [], visibility }
+    const post: Post = { id: crypto.randomUUID(), author: profile, body: body.trim(), imageUrl, createdAt: new Date().toISOString(), likes: 0, liked: false, likedBy: [], revisions: [], comments: [], visibility }
     const next = [post, ...posts]; setPosts(next); persist({ posts: next }); setBusy(false); return true
   }
 
@@ -154,12 +182,44 @@ export function useSocialApp() {
     if (!profile) return
     const target = posts.find((post) => post.id === postId)
     if (!target) return
-    const next = posts.map((post) => post.id === postId ? { ...post, liked: !post.liked, likes: Math.max(0, post.likes + (post.liked ? -1 : 1)) } : post)
+    const next = posts.map((post) => post.id === postId ? { ...post, liked: !post.liked, likes: Math.max(0, post.likes + (post.liked ? -1 : 1)), likedBy: post.liked ? post.likedBy.filter((id) => id !== profile.id) : [...new Set([...post.likedBy, profile.id])] } : post)
     setPosts(next); persist({ posts: next })
     if (supabase && session) {
       if (target.liked) await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', session.user.id)
       else await supabase.from('likes').insert({ post_id: postId, user_id: session.user.id })
     }
+  }
+
+  const updatePost = async (postId: string, body: string) => {
+    if (!profile || !body.trim()) return false
+    const target = posts.find((post) => post.id === postId)
+    if (!target || target.author.id !== profile.id || target.body === body.trim()) return false
+    setBusy(true); setError('')
+    const editedAt = new Date().toISOString()
+    if (supabase && session) {
+      const result = await supabase.from('posts').update({ body: body.trim(), updated_at: editedAt }).eq('id', postId).eq('user_id', session.user.id)
+      if (result.error) { setError(result.error.message); setBusy(false); return false }
+    }
+    const revision: PostRevision = { id: crypto.randomUUID(), body: target.body, createdAt: editedAt }
+    const localRevisions = readLocalRevisions()
+    localRevisions[postId] = [revision, ...(localRevisions[postId] || target.revisions)]
+    writeLocalRevisions(localRevisions)
+    const next = posts.map((post) => post.id === postId ? { ...post, body: body.trim(), updatedAt: editedAt, revisions: [revision, ...post.revisions] } : post)
+    setPosts(next); persist({ posts: next }); setBusy(false); return true
+  }
+
+  const deletePost = async (postId: string) => {
+    if (!profile) return false
+    const target = posts.find((post) => post.id === postId)
+    if (!target || target.author.id !== profile.id) return false
+    setBusy(true); setError('')
+    if (supabase && session) {
+      const result = await supabase.from('posts').delete().eq('id', postId).eq('user_id', session.user.id)
+      if (result.error) { setError(result.error.message); setBusy(false); return false }
+    }
+    const next = posts.filter((post) => post.id !== postId)
+    const localRevisions = readLocalRevisions(); delete localRevisions[postId]; writeLocalRevisions(localRevisions)
+    setPosts(next); persist({ posts: next }); setBusy(false); return true
   }
 
   const addComment = async (postId: string, body: string) => {
@@ -260,8 +320,8 @@ export function useSocialApp() {
     if (supabase) await supabase.from('reports').update({ status }).eq('id', id)
   }
 
-  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); location.reload() }
+  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); location.reload() }
 
   return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, notices, reports, busy, error,
-    authenticate, signOut, createPost, toggleLike, addComment, toggleFollow, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+    authenticate, signOut, createPost, updatePost, deletePost, toggleLike, addComment, toggleFollow, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }
