@@ -20,12 +20,12 @@
 
 :root[data-theme='dark'] {
   color: #f5f5f5;
-  background: #000000;
+  background: #252728;
   --text: #f5f5f5;
-  --muted: #a7a7a7;
-  --line: #292929;
-  --surface: #080808;
-  --surface-2: #151515;
+  --muted: #b0b2b3;
+  --line: #454748;
+  --surface: #2c2e2f;
+  --surface-2: #343637;
   --green-soft: #321117;
   --shadow: 0 10px 35px rgba(0, 0, 0, .55);
 }
@@ -34,7 +34,7 @@
 html { scroll-behavior: smooth; max-width: 100%; overflow-x: hidden; }
 body { margin: 0; min-width: 320px; min-height: 100vh; max-width: 100%; overflow-x: hidden; background: #f8f3f4; color: var(--text); }
 #root, .app-shell, .content, .page-stack { min-width: 0; max-width: 100%; }
-:root[data-theme='dark'] body { background: #000000; }
+:root[data-theme='dark'] body { background: #252728; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -44,7 +44,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 
 .app-shell { min-height: 100vh; }
 .topbar { height: calc(68px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); background: var(--green); border-bottom: 1px solid var(--green-2); position: sticky; top: 0; z-index: 40; }
-:root[data-theme='dark'] .topbar { background: #000000; border-bottom-color: #292929; }
+:root[data-theme='dark'] .topbar { background: #252728; border-bottom-color: #454748; }
 .topbar-inner { max-width: 1400px; height: 68px; margin: auto; padding: 0 26px; display: flex; align-items: center; gap: 34px; }
 .wordmark { border: 0; background: none; color: #fff; display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 0; font-size: 23px; }
 .brand-mark { width: 38px; height: 38px; border-radius: 12px; display: block; object-fit: cover; box-shadow: inset 0 -3px rgba(0,0,0,.12); }
