@@ -7,4 +7,4 @@ set image_urls = case
 end
 where image_url is not null and cardinality(image_urls) = 0;
 
-comment on column public.posts.image_urls is 'Ordered public URLs for up to four images attached to a post.';
+comment on column public.posts.image_urls is 'Ordered public URLs for up to forty images attached to a post.';

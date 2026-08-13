@@ -66,7 +66,7 @@ function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile:
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
   const choose = (selected: FileList | null) => {
     const next = Array.from(selected || []).filter((file) => file.type.startsWith('image/') && file.size <= 8 * 1024 * 1024)
-    if (next.length) setFiles((current) => [...current, ...next].slice(0, 4))
+    if (next.length) setFiles((current) => [...current, ...next].slice(0, 40))
     if (input.current) input.current.value = ''
   }
   const submit = async () => {
@@ -80,7 +80,7 @@ function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile:
       <LinkPreview text={body} posts={posts} />
       {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
       <div className="composer-tools">
-        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 4}><Image size={20} /><span>{files.length ? `${files.length}/4 foto's` : "Foto's"}</span></button>
+        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 40}><Image size={20} /><span>{files.length ? `${files.length}/40 foto's` : "Foto's"}</span></button>
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden onChange={(event) => choose(event.target.files)} />
         <select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)} aria-label="Zichtbaarheid"><option value="public">Iedereen</option><option value="followers">Volgers</option></select>
         <span className="char-count">{body.length}/2000</span>

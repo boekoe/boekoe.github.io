@@ -12,6 +12,13 @@ export function PostImages({ urls, authorName, className = '' }: { urls: string[
         {index === 3 && urls.length > 4 && <span>+{urls.length - 4}</span>}
       </button>)}
     </div>
-    {active !== null && urls[active] && <ImageViewer src={urls[active]} alt={`Afbeelding ${active + 1} bij bericht van ${authorName}`} onClose={() => setActive(null)} />}
+    {active !== null && urls[active] && <ImageViewer
+      src={urls[active]}
+      alt={`Afbeelding ${active + 1} bij bericht van ${authorName}`}
+      onClose={() => setActive(null)}
+      onPrevious={urls.length > 1 ? () => setActive((active - 1 + urls.length) % urls.length) : undefined}
+      onNext={urls.length > 1 ? () => setActive((active + 1) % urls.length) : undefined}
+      position={urls.length > 1 ? `${active + 1} / ${urls.length}` : undefined}
+    />}
   </>
 }
