@@ -1,4 +1,4 @@
-const CACHE = 'boekoe-v6'
+const CACHE = 'boekoe-v7'
 const BASE = '/'
 const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`, `${BASE}icon-192.png`, `${BASE}icon-512.png`]
 
