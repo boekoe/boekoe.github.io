@@ -3,6 +3,7 @@ import { Ban, Ellipsis, Flag, Heart, LoaderCircle, MessageCircle, Share2, UserRo
 import type { Post } from '../types'
 import { Avatar, Modal, Name } from './ui'
 import { ImageViewer } from './ImageViewer'
+import { LinkifiedText, LinkPreview } from './LinkPreview'
 
 function ago(value: string) {
   const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
@@ -12,8 +13,8 @@ function ago(value: string) {
   return `${Math.floor(seconds / 86400)} d.`
 }
 
-export function PostCard({ post, currentUserId, onLike, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
-  post: Post; currentUserId: string; onLike: () => void; onOpenComments: () => void; onShareProfile: (caption: string) => Promise<boolean>
+export function PostCard({ post, allPosts, currentUserId, onLike, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
+  post: Post; allPosts: Post[]; currentUserId: string; onLike: () => void; onOpenComments: () => void; onShareProfile: (caption: string) => Promise<boolean>
   onReport: (reason: string) => void; onBlock: () => void; onToast: (message: string) => void
 }) {
   const [menu, setMenu] = useState(false)
@@ -49,7 +50,8 @@ export function PostCard({ post, currentUserId, onLike, onOpenComments, onShareP
         </div>}
       </div>
     </header>
-    {post.body && <p className="post-body">{post.body}</p>}
+    {post.body && <div className="post-body"><LinkifiedText text={post.body} /></div>}
+    <LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} />
     {post.imageUrl && <button type="button" className="post-image-button" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img className="post-image" src={post.imageUrl} alt="Afbeelding bij bericht" loading="lazy" /></button>}
     <div className="post-stats">
       <span>{post.likes ? `${post.likes} ${post.likes === 1 ? 'like' : 'likes'}` : 'Wees de eerste'}</span>
