@@ -6,15 +6,17 @@ import { hasSupabase, supabase } from './supabase'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
 
-type DemoState = { posts: Post[]; following: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
+type DemoState = { posts: Post[]; following: string[]; followers: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
 type ProfileMedia = { avatar?: File | null; cover?: File | null }
+
+const demoDefaults: DemoState = { posts: demoPosts, following: ['p1', 'p4'], followers: ['p1', 'p5'], notices: demoNotices, reports: demoReports, profile: demoUser }
 
 function readDemo(): DemoState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : { posts: demoPosts, following: ['p1', 'p4'], notices: demoNotices, reports: demoReports, profile: demoUser }
+    return saved ? { ...demoDefaults, ...JSON.parse(saved) } : demoDefaults
   } catch {
-    return { posts: demoPosts, following: ['p1', 'p4'], notices: demoNotices, reports: demoReports, profile: demoUser }
+    return demoDefaults
   }
 }
 
@@ -46,6 +48,7 @@ export function useSocialApp() {
   const [posts, setPosts] = useState<Post[]>(hasSupabase ? [] : initial.posts)
   const [profiles, setProfiles] = useState<Profile[]>(hasSupabase ? [] : people)
   const [following, setFollowing] = useState<string[]>(initial.following)
+  const [followers, setFollowers] = useState<string[]>(initial.followers)
   const [notices, setNotices] = useState<Notice[]>(hasSupabase ? [] : initial.notices)
   const [reports, setReports] = useState<Report[]>(hasSupabase ? [] : initial.reports)
   const [busy, setBusy] = useState(false)
@@ -53,25 +56,27 @@ export function useSocialApp() {
 
   const persist = useCallback((next: Partial<DemoState>) => {
     if (hasSupabase) return
-    const value = { posts, following, notices, reports, profile: profile || demoUser, ...next }
+    const value = { posts, following, followers, notices, reports, profile: profile || demoUser, ...next }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-  }, [posts, following, notices, reports, profile])
+  }, [posts, following, followers, notices, reports, profile])
 
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
     setBusy(true)
     const userId = activeSession.user.id
-    const [profileRes, feedRes, profilesRes, followingRes, noticesRes] = await Promise.all([
+    const [profileRes, feedRes, profilesRes, followingRes, followersRes, noticesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('posts').select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').order('created_at', { ascending: false }).limit(50),
       supabase.from('profiles').select('*').limit(50),
       supabase.from('follows').select('following_id').eq('follower_id', userId),
+      supabase.from('follows').select('follower_id').eq('following_id', userId),
       supabase.from('notifications').select('*, actor:profiles!notifications_actor_id_fkey(*)').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
     ])
     if (profileRes.data) setProfile(rowProfile(profileRes.data))
     if (feedRes.data) setPosts(feedRes.data.map((row: any) => rowPost(row, userId)))
     if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile))
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
+    if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
     if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
     if (profileRes.data?.is_admin) {
       const reportsRes = await supabase.from('reports').select('*').order('created_at', { ascending: false })
@@ -257,6 +262,6 @@ export function useSocialApp() {
 
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); location.reload() }
 
-  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, notices, reports, busy, error,
+  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, notices, reports, busy, error,
     authenticate, signOut, createPost, toggleLike, addComment, toggleFollow, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

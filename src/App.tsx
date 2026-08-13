@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bell, Camera, Check, ChevronRight, Compass, Flag, Heart, Home, Image, LoaderCircle, LogOut,
-  Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles,
-  Sun, UserRound, UserRoundPlus, Users, X,
+  ArrowLeft, Bell, Camera, Check, ChevronRight, Compass, Flag, Heart, Home, Image, LoaderCircle,
+  LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
+  Sparkles, Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
 import type { AppView, Profile } from './types'
 import { useSocialApp } from './lib/useSocialApp'
@@ -31,9 +31,28 @@ function readHashRoute() {
   let parts: string[] = []
   try { parts = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map((part) => decodeURIComponent(part)) } catch { return { view: 'feed' as AppView } }
   if (parts[0] === 'profile' && parts[1]) return { view: 'profile' as AppView, username: parts[1] }
+  if (parts[0] === 'post' && parts[1] && parts[2] === 'comments') return { view: 'comments' as AppView, postId: parts[1] }
   if (parts[0] === 'post' && parts[1]) return { view: 'feed' as AppView, postId: parts[1] }
   if (['feed', 'discover', 'compose', 'notifications', 'profile', 'moderation'].includes(parts[0])) return { view: parts[0] as AppView }
   return { view: 'feed' as AppView }
+}
+
+type FriendshipStatus = 'none' | 'incoming' | 'outgoing' | 'friends'
+
+function friendshipStatus(id: string, following: string[], followers: string[]): FriendshipStatus {
+  const outgoing = following.includes(id)
+  const incoming = followers.includes(id)
+  if (outgoing && incoming) return 'friends'
+  if (incoming) return 'incoming'
+  if (outgoing) return 'outgoing'
+  return 'none'
+}
+
+function friendshipLabel(status: FriendshipStatus) {
+  if (status === 'friends') return 'Vrienden'
+  if (status === 'incoming') return 'Verzoek accepteren'
+  if (status === 'outgoing') return 'Verzoek verzonden'
+  return 'Vriend toevoegen'
 }
 
 function Compose({ profile, busy, autofocus = false, onPost }: { profile: Profile; busy: boolean; autofocus?: boolean; onPost: (body: string, file: File | null, visibility: 'public' | 'followers') => Promise<boolean> }) {
@@ -68,10 +87,10 @@ function Compose({ profile, busy, autofocus = false, onPost }: { profile: Profil
   </section>
 }
 
-function Suggestions({ profiles, currentId, following, onFollow }: { profiles: Profile[]; currentId: string; following: string[]; onFollow: (id: string) => void }) {
+function Suggestions({ profiles, currentId, following, followers, onFriendAction }: { profiles: Profile[]; currentId: string; following: string[]; followers: string[]; onFriendAction: (id: string) => void }) {
   return <aside className="right-rail">
     <section className="rail-card"><div className="rail-title"><h3>Mensen voor jou</h3><Users size={18} /></div>
-      {profiles.filter((item) => item.id !== currentId).slice(0, 4).map((person) => <div className="suggestion" key={person.id}><Avatar profile={person} size={39} /><div><Name profile={person} /><small>@{person.username}</small></div><button className={following.includes(person.id) ? 'follow active' : 'follow'} onClick={() => onFollow(person.id)}>{following.includes(person.id) ? <Check size={16} /> : <Plus size={16} />}</button></div>)}
+      {profiles.filter((item) => item.id !== currentId).slice(0, 4).map((person) => { const status = friendshipStatus(person.id, following, followers); return <div className="suggestion" key={person.id}><Avatar profile={person} size={39} /><div><Name profile={person} /><small>@{person.username}</small></div><button className={status === 'none' || status === 'incoming' ? 'follow' : 'follow active'} onClick={() => status !== 'friends' && onFriendAction(person.id)} disabled={status === 'friends'} aria-label={friendshipLabel(status)}>{status === 'friends' ? <Check size={16} /> : status === 'incoming' ? <UserRoundPlus size={16} /> : status === 'outgoing' ? <Check size={16} /> : <Plus size={16} />}</button></div> })}
     </section>
     <section className="rail-card trends"><div className="rail-title"><h3>Populair in Suriname</h3><Sparkles size={18} /></div>
       {[['#BoekoePraat', '1,2K berichten'], ['#Paramaribo', '865 berichten'], ['Suriname', '642 berichten'], ['#EigenBodem', '391 berichten']].map(([topic, count]) => <button key={topic}><span>{topic}</span><small>{count}</small></button>)}
@@ -80,7 +99,7 @@ function Suggestions({ profiles, currentId, following, onFollow }: { profiles: P
   </aside>
 }
 
-function Discover({ profiles, posts, currentId, following, onFollow }: { profiles: Profile[]; posts: ReturnType<typeof useSocialApp>['posts']; currentId: string; following: string[]; onFollow: (id: string) => void }) {
+function Discover({ profiles, posts, currentId, following, followers, onFriendAction }: { profiles: Profile[]; posts: ReturnType<typeof useSocialApp>['posts']; currentId: string; following: string[]; followers: string[]; onFriendAction: (id: string) => void }) {
   const [query, setQuery] = useState('')
   const normalized = query.toLowerCase().trim()
   const foundPeople = profiles.filter((item) => item.id !== currentId && (!normalized || `${item.fullName} ${item.username} ${item.location}`.toLowerCase().includes(normalized)))
@@ -88,30 +107,52 @@ function Discover({ profiles, posts, currentId, following, onFollow }: { profile
   return <div className="page-stack">
     <div className="search-large"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Zoek mensen, onderwerpen of berichten" autoFocus /></div>
     <section className="card section-card"><h2>{normalized ? 'Mensen' : 'Ontdek mensen'}</h2><div className="people-grid">
-      {foundPeople.map((person) => <article className="person-card" key={person.id}><Avatar profile={person} size={64} /><Name profile={person} /><span>@{person.username} · {person.location}</span><p>{person.bio}</p><small>{person.followers.toLocaleString('nl-NL')} volgers</small><button className={following.includes(person.id) ? 'secondary wide' : 'primary wide'} onClick={() => onFollow(person.id)}>{following.includes(person.id) ? 'Volgend' : 'Volgen'}</button></article>)}
+      {foundPeople.map((person) => { const status = friendshipStatus(person.id, following, followers); return <article className="person-card" key={person.id}><Avatar profile={person} size={64} /><Name profile={person} /><span>@{person.username} · {person.location}</span><p>{person.bio}</p><small>{person.followers.toLocaleString('nl-NL')} connecties</small><button className={status === 'none' || status === 'incoming' ? 'primary wide' : 'secondary wide'} onClick={() => status !== 'friends' && onFriendAction(person.id)} disabled={status === 'friends'}>{friendshipLabel(status)}</button></article> })}
     </div>{foundPeople.length === 0 && <EmptyState icon={<Search />} title="Niemand gevonden" text="Probeer een andere naam of plaats." />}</section>
     {normalized && <section className="card section-card"><h2>Berichten</h2>{foundPosts.length ? foundPosts.map((post) => <div className="search-post" key={post.id}><Avatar profile={post.author} size={38} /><div><Name profile={post.author} /><p>{post.body}</p></div></div>) : <p className="muted">Geen passende berichten gevonden.</p>}</section>}
   </div>
 }
 
-function Notifications({ notices, onRead }: { notices: ReturnType<typeof useSocialApp>['notices']; onRead: () => void }) {
+function Notifications({ notices, following, onFriendAction, onRead }: { notices: ReturnType<typeof useSocialApp>['notices']; following: string[]; onFriendAction: (id: string) => void; onRead: () => void }) {
   const readOnce = useRef(false)
   useEffect(() => { if (!readOnce.current) { readOnce.current = true; onRead() } }, [onRead])
   return <section className="card page-card"><div className="page-title"><div><h1>Meldingen</h1><p>Wat er in je community gebeurt</p></div></div>
-    <div className="notice-list">{notices.map((notice) => <article className={`notice ${notice.read ? '' : 'unread'}`} key={notice.id}>{notice.actor ? <Avatar profile={notice.actor} size={46} /> : <span className="notice-system"><ShieldCheck /></span>}<div>{notice.actor && <Name profile={notice.actor} />} <span>{notice.text}</span><small>{timeAgo(notice.createdAt)}</small></div><span className={`notice-icon ${notice.kind}`}>{notice.kind === 'like' ? <Heart size={16} fill="currentColor" /> : notice.kind === 'comment' ? <MessageCircle size={16} /> : notice.kind === 'follow' ? <UserRoundPlus size={16} /> : <ShieldCheck size={16} />}</span></article>)}</div>
+    <div className="notice-list">{notices.map((notice) => { const accepted = notice.kind === 'follow' && notice.actor && following.includes(notice.actor.id); return <article className={`notice ${notice.read ? '' : 'unread'}`} key={notice.id}>{notice.actor ? <Avatar profile={notice.actor} size={46} /> : <span className="notice-system"><ShieldCheck /></span>}<div>{notice.actor && <Name profile={notice.actor} />} <span>{notice.kind === 'follow' ? accepted ? 'is nu je vriend' : 'wil vrienden worden' : notice.text}</span><small>{timeAgo(notice.createdAt)}</small>{notice.kind === 'follow' && notice.actor && !accepted && <button className="primary request-accept" onClick={() => onFriendAction(notice.actor!.id)}>Verzoek accepteren</button>}</div><span className={`notice-icon ${notice.kind}`}>{notice.kind === 'like' ? <Heart size={16} fill="currentColor" /> : notice.kind === 'comment' ? <MessageCircle size={16} /> : notice.kind === 'follow' ? <UserRoundPlus size={16} /> : <ShieldCheck size={16} />}</span></article> })}</div>
   </section>
 }
 
-function ProfilePage({ profile, currentId, posts, following, onFollow, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; onFollow: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
+function ProfilePage({ profile, currentId, posts, following, followers, onFriendAction, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; followers: string[]; onFriendAction: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
   const mine = posts.filter((post) => post.author.id === profile.id)
   const isMine = profile.id === currentId
+  const friendState = friendshipStatus(profile.id, following, followers)
   const [viewingImage, setViewingImage] = useState<{ src: string; alt: string } | null>(null)
   return <div className="page-stack"><section className="card profile-card">
     <button type="button" className={`cover ${profile.coverUrl ? 'has-image' : ''}`} style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined} onClick={() => profile.coverUrl && setViewingImage({ src: profile.coverUrl, alt: `Omslagfoto van ${profile.fullName}` })} disabled={!profile.coverUrl} aria-label={profile.coverUrl ? 'Omslagfoto openen en inzoomen' : 'Geen omslagfoto'}><div className="cover-pattern" /></button>
-    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <button className={following.includes(profile.id) ? 'secondary edit-profile' : 'primary edit-profile'} onClick={() => onFollow(profile.id)}>{following.includes(profile.id) ? 'Volgend' : 'Volgen'}</button>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> volgers</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> volgend</span><span><strong>{mine.length}</strong> berichten</span></div></div>
+    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <button className={friendState === 'none' || friendState === 'incoming' ? 'primary edit-profile' : 'secondary edit-profile'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
     {isMine && <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>}
   </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}><p>{post.body}</p>{post.imageUrl && <button type="button" onClick={() => setViewingImage({ src: post.imageUrl!, alt: `Afbeelding bij bericht van ${profile.fullName}` })} aria-label="Afbeelding openen en inzoomen"><img src={post.imageUrl} alt="" /></button>}<small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
     {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} onClose={() => setViewingImage(null)} />}
+  </div>
+}
+
+function CommentPage({ post, profile, busy, onBack, onComment }: { post: ReturnType<typeof useSocialApp>['posts'][number] | undefined; profile: Profile; busy: boolean; onBack: () => void; onComment: (body: string) => Promise<void> }) {
+  const [body, setBody] = useState('')
+  const [viewingImage, setViewingImage] = useState(false)
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!body.trim() || busy) return
+    await onComment(body)
+    setBody('')
+  }
+  if (!post) return <section className="card page-card"><button className="thread-back" onClick={onBack}><ArrowLeft /> Terug</button><EmptyState icon={<MessageCircle />} title="Bericht niet gevonden" text="Dit bericht bestaat niet of is verwijderd." /></section>
+  return <div className="page-stack thread-page">
+    <section className="card thread-card">
+      <header className="thread-title"><button className="icon-button" onClick={onBack} aria-label="Terug"><ArrowLeft /></button><div><h1>Reacties</h1><p>Praat mee met de community</p></div></header>
+      <article className="thread-original"><div className="thread-author"><Avatar profile={post.author} size={46} /><div><Name profile={post.author} /><small>@{post.author.username} · {timeAgo(post.createdAt)}</small></div></div>{post.body && <p>{post.body}</p>}{post.imageUrl && <button type="button" className="thread-image" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img src={post.imageUrl} alt="Afbeelding bij bericht" /></button>}</article>
+      <form className="thread-compose" onSubmit={submit}><Avatar profile={profile} size={40} /><div><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} placeholder={`Schrijf je reactie, ${profile.fullName.split(' ')[0]}…`} aria-label="Reactie schrijven" /><div><span>{body.length}/1000</span><button className="primary compact" disabled={!body.trim() || busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <><Send size={17} /> Reageren</>}</button></div></div></form>
+      <div className="thread-comments"><h2>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</h2>{post.comments.length ? post.comments.map((comment) => <article className="thread-comment" key={comment.id}><Avatar profile={comment.author} size={38} /><div><Name profile={comment.author} /><p>{comment.body}</p><small>{timeAgo(comment.createdAt)}</small></div></article>) : <EmptyState icon={<MessageCircle />} title="Nog geen reacties" text="Schrijf de eerste reactie op dit bericht." />}</div>
+    </section>
+    {viewingImage && post.imageUrl && <ImageViewer src={post.imageUrl} alt={`Afbeelding bij bericht van ${post.author.fullName}`} onClose={() => setViewingImage(false)} />}
   </div>
 }
 
@@ -143,7 +184,7 @@ export default function App() {
       setView(route.view)
       setProfileUsername(route.username || '')
       setMobileMenu(false)
-      if (!route.postId) window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (!route.postId || route.view === 'comments') window.scrollTo({ top: 0, behavior: 'smooth' })
     }
     window.addEventListener('hashchange', applyHash)
     if (window.location.hash) applyHash()
@@ -161,6 +202,8 @@ export default function App() {
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
+  const activePostId = readHashRoute().postId
+  const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
   const go = (next: AppView) => {
     const hash = next === 'profile' ? `/profile/${encodeURIComponent(profile.username)}` : `/${next}`
     if (window.location.hash === `#${hash}`) {
@@ -168,6 +211,18 @@ export default function App() {
     } else window.location.hash = hash
   }
   const post = async (body: string, file: File | null, visibility: 'public' | 'followers') => { const ok = await store.createPost(body, file, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
+  const friendAction = async (id: string) => {
+    const status = friendshipStatus(id, store.following, store.followers)
+    if (status === 'friends') return
+    await store.toggleFollow(id)
+    setToast(status === 'incoming' ? 'Vriendschapsverzoek geaccepteerd' : status === 'outgoing' ? 'Vriendschapsverzoek geannuleerd' : 'Vriendschapsverzoek verzonden')
+  }
+  const shareOnProfile = async (item: typeof feed[number], caption: string) => {
+    const url = new URL(import.meta.env.BASE_URL, window.location.origin)
+    url.hash = `/post/${encodeURIComponent(item.id)}`
+    const sharedBody = [caption.trim(), `Gedeeld van @${item.author.username}`, item.body, url.toString()].filter(Boolean).join('\n\n')
+    return store.createPost(sharedBody, null, 'public')
+  }
 
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
@@ -178,15 +233,16 @@ export default function App() {
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
       <main className="content">
-        {view === 'feed' && <div className="page-stack"><div className="feed-intro"><div><h1>Goedemorgen, {profile.fullName.split(' ')[0]} 👋</h1><p>Dit speelt er vandaag in je community.</p></div></div><Compose profile={profile} busy={store.busy} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} currentUserId={profile.id} onLike={() => store.toggleLike(item.id)} onComment={(body) => store.addComment(item.id, body)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => store.blockUser(item.author.id)} onToast={setToast} />)}</div>}
+        {view === 'feed' && <div className="page-stack"><div className="feed-intro"><div><h1>Goedemorgen, {profile.fullName.split(' ')[0]} 👋</h1><p>Dit speelt er vandaag in je community.</p></div></div><Compose profile={profile} busy={store.busy} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} currentUserId={profile.id} onLike={() => store.toggleLike(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => store.blockUser(item.author.id)} onToast={setToast} />)}</div>}
         {view === 'compose' && <div className="page-stack"><div className="simple-title"><h1>Nieuw bericht</h1><p>Deel iets met je community</p></div><Compose profile={profile} busy={store.busy} autofocus onPost={post} /></div>}
-        {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} onFollow={store.toggleFollow} />}
-        {view === 'notifications' && <Notifications notices={store.notices} onRead={store.markNoticesRead} />}
-        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} onFollow={store.toggleFollow} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
+        {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onRead={store.markNoticesRead} />}
+        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
+        {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body) => { if (activePostId) { await store.addComment(activePostId, body); setToast('Reactie geplaatst') } }} />}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
       </main>
-      <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} onFollow={store.toggleFollow} />
+      <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
     <nav className="bottom-nav">{nav.map((item) => <button key={item.view} className={`${view === item.view ? 'active' : ''} ${item.compose ? 'compose-nav' : ''}`} onClick={() => go(item.view)}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</span><small>{item.label}</small></button>)}</nav>
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}

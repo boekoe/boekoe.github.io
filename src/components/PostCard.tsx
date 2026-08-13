@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Ban, Ellipsis, Flag, Heart, MessageCircle, Send, Share2, Users } from 'lucide-react'
+import { Ban, Ellipsis, Flag, Heart, LoaderCircle, MessageCircle, Share2, UserRound, Users } from 'lucide-react'
 import type { Post } from '../types'
 import { Avatar, Modal, Name } from './ui'
 import { ImageViewer } from './ImageViewer'
@@ -12,23 +12,29 @@ function ago(value: string) {
   return `${Math.floor(seconds / 86400)} d.`
 }
 
-export function PostCard({ post, currentUserId, onLike, onComment, onReport, onBlock, onToast }: {
-  post: Post; currentUserId: string; onLike: () => void; onComment: (body: string) => void
+export function PostCard({ post, currentUserId, onLike, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
+  post: Post; currentUserId: string; onLike: () => void; onOpenComments: () => void; onShareProfile: (caption: string) => Promise<boolean>
   onReport: (reason: string) => void; onBlock: () => void; onToast: (message: string) => void
 }) {
-  const [commenting, setCommenting] = useState(false)
-  const [comment, setComment] = useState('')
   const [menu, setMenu] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [viewingImage, setViewingImage] = useState(false)
-  const submit = () => { if (!comment.trim()) return; onComment(comment); setComment(''); setCommenting(true) }
-  const share = async () => {
+  const [sharing, setSharing] = useState(false)
+  const [sharingProfile, setSharingProfile] = useState(false)
+  const [caption, setCaption] = useState('')
+  const shareExternal = async () => {
     const url = new URL(import.meta.env.BASE_URL, window.location.origin)
     url.hash = `/post/${encodeURIComponent(post.id)}`
     const absoluteUrl = url.toString()
     const data = { title: `Bericht van ${post.author.fullName}`, text: post.body, url: absoluteUrl }
     if (navigator.share) await navigator.share(data).catch(() => undefined)
     else { await navigator.clipboard?.writeText(`${post.body}\n${absoluteUrl}`); onToast('Link gekopieerd') }
+  }
+  const shareOnProfile = async () => {
+    setSharingProfile(true)
+    const ok = await onShareProfile(caption)
+    setSharingProfile(false)
+    if (ok) { setSharing(false); setCaption(''); onToast('Bericht gedeeld op je profiel') }
   }
 
   return <article className="card post-card" id={`post-${post.id}`}>
@@ -47,23 +53,21 @@ export function PostCard({ post, currentUserId, onLike, onComment, onReport, onB
     {post.imageUrl && <button type="button" className="post-image-button" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img className="post-image" src={post.imageUrl} alt="Afbeelding bij bericht" loading="lazy" /></button>}
     <div className="post-stats">
       <span>{post.likes ? `${post.likes} ${post.likes === 1 ? 'like' : 'likes'}` : 'Wees de eerste'}</span>
-      <button onClick={() => setCommenting(true)}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
+      <button onClick={onOpenComments}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
     </div>
     <div className="post-actions">
       <button className={post.liked ? 'liked' : ''} onClick={onLike}><Heart size={20} fill={post.liked ? 'currentColor' : 'none'} /> Leuk</button>
-      <button onClick={() => setCommenting(!commenting)}><MessageCircle size={20} /> Reageer</button>
-      <button onClick={share}><Share2 size={20} /> Deel</button>
+      <button onClick={onOpenComments}><MessageCircle size={20} /> Reageer</button>
+      <button onClick={() => setSharing(true)}><Share2 size={20} /> Deel</button>
     </div>
-    {(commenting || post.comments.length > 0) && <div className="comments">
+    {post.comments.length > 0 && <div className="comments comment-preview">
       {post.comments.map((item) => <div className="comment" key={item.id}>
         <Avatar profile={item.author} size={32} />
         <div><Name profile={item.author} /><p>{item.body}</p><small>{ago(item.createdAt)}</small></div>
       </div>)}
-      <div className="comment-input">
-        <input value={comment} onChange={(event) => setComment(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && submit()} placeholder="Schrijf een reactie…" aria-label="Reactie" />
-        <button className="send-button" onClick={submit} disabled={!comment.trim()}><Send size={17} /></button>
-      </div>
+      <button className="open-comments" onClick={onOpenComments}>Bekijk en schrijf reacties</button>
     </div>}
+    {sharing && <Modal title="Bericht delen" onClose={() => setSharing(false)}><div className="modal-body share-dialog"><label>Caption<textarea value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={500} placeholder="Zeg iets over dit bericht…" autoFocus /></label><div className="share-options"><button className="primary" onClick={shareOnProfile} disabled={sharingProfile}>{sharingProfile ? <LoaderCircle className="spin" size={18} /> : <UserRound size={18} />} Delen op mijn profiel</button><button className="secondary" onClick={shareExternal}><Share2 size={18} /> Delen via WhatsApp, Messenger…</button></div></div></Modal>}
     {reporting && <Modal title="Bericht rapporteren" onClose={() => setReporting(false)}>
       <div className="modal-body"><p className="muted">Waarom wil je dit bericht rapporteren? De auteur ziet niet wie de melding heeft gedaan.</p>
         <div className="reason-list">{['Spam of ongewenste reclame', 'Haatdragend of intimiderend', 'Misleidende informatie', 'Naakt of gewelddadig beeld', 'Iets anders'].map((reason) => <button key={reason} onClick={() => { onReport(reason); setReporting(false); onToast('Melding ontvangen. Bedankt.') }}>{reason}<span>›</span></button>)}</div>
