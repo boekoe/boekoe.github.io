@@ -23,6 +23,7 @@ create table if not exists public.posts (
   user_id uuid not null references public.profiles(id) on delete cascade,
   body text not null default '' check (char_length(body) <= 2000),
   image_url text,
+  image_urls text[] not null default '{}',
   visibility text not null default 'public' check (visibility in ('public', 'followers')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -6,6 +6,7 @@ import { hasSupabase, supabase } from './supabase'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
 const REVISION_STORAGE_KEY = 'boekoe-post-revisions-v1'
+const MEDIA_STORAGE_KEY = 'boekoe-post-media-v1'
 
 type DemoState = { posts: Post[]; following: string[]; followers: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
 type ProfileMedia = { avatar?: File | null; cover?: File | null }
@@ -20,8 +21,17 @@ function writeLocalRevisions(value: Record<string, PostRevision[]>) {
   localStorage.setItem(REVISION_STORAGE_KEY, JSON.stringify(value))
 }
 
+function readLocalMedia(): Record<string, string[]> {
+  try { return JSON.parse(localStorage.getItem(MEDIA_STORAGE_KEY) || '{}') } catch { return {} }
+}
+
+function writeLocalMedia(value: Record<string, string[]>) {
+  localStorage.setItem(MEDIA_STORAGE_KEY, JSON.stringify(value))
+}
+
 function normalizePost(post: Post): Post {
-  return { ...post, likedBy: post.likedBy || [], revisions: post.revisions || [] }
+  const imageUrls = post.imageUrls?.length ? post.imageUrls : post.imageUrl ? [post.imageUrl] : []
+  return { ...post, imageUrl: imageUrls[0], imageUrls, likedBy: post.likedBy || [], revisions: post.revisions || [] }
 }
 
 function readDemo(): DemoState {
@@ -41,13 +51,27 @@ const rowProfile = (row: any): Profile => ({
   verified: Boolean(row.verified), isAdmin: Boolean(row.is_admin), followers: row.followers_count || 0, following: row.following_count || 0,
 })
 
-const rowPost = (row: any, userId: string, revisions: PostRevision[] = []): Post => ({
-  id: row.id, author: rowProfile(row.author), body: row.body, imageUrl: row.image_url || undefined,
-  createdAt: row.created_at, updatedAt: row.updated_at, visibility: row.visibility || 'public', likes: row.likes?.length || 0,
-  liked: Boolean(row.likes?.some((like: any) => like.user_id === userId)),
-  likedBy: (row.likes || []).map((like: any) => like.user_id), revisions,
-  comments: (row.comments || []).map((comment: any) => ({ id: comment.id, author: rowProfile(comment.author), body: comment.body, createdAt: comment.created_at })),
-})
+function rowImageUrls(row: any, localMedia: string[]) {
+  if (row.image_urls?.length) return row.image_urls as string[]
+  if (localMedia.length) return localMedia
+  if (!row.image_url) return []
+  try {
+    const parsed = JSON.parse(row.image_url)
+    if (Array.isArray(parsed) && parsed.every((url) => typeof url === 'string')) return parsed
+  } catch { /* A normal single URL is not JSON. */ }
+  return [row.image_url]
+}
+
+const rowPost = (row: any, userId: string, revisions: PostRevision[] = [], localMedia: string[] = []): Post => {
+  const imageUrls = rowImageUrls(row, localMedia)
+  return {
+    id: row.id, author: rowProfile(row.author), body: row.body, imageUrl: imageUrls[0], imageUrls,
+    createdAt: row.created_at, updatedAt: row.updated_at, visibility: row.visibility || 'public', likes: row.likes?.length || 0,
+    liked: Boolean(row.likes?.some((like: any) => like.user_id === userId)),
+    likedBy: (row.likes || []).map((like: any) => like.user_id), revisions,
+    comments: (row.comments || []).map((comment: any) => ({ id: comment.id, author: rowProfile(comment.author), body: comment.body, createdAt: comment.created_at })),
+  }
+}
 
 const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader()
@@ -91,6 +115,7 @@ export function useSocialApp() {
     if (profileRes.data) setProfile(rowProfile(profileRes.data))
     if (feedRes.data) {
       const localRevisions = readLocalRevisions()
+      const localMedia = readLocalMedia()
       const postIds = feedRes.data.map((row: any) => row.id)
       let serverRevisions: Record<string, PostRevision[]> = {}
       if (postIds.length) {
@@ -100,7 +125,7 @@ export function useSocialApp() {
           return all
         }, {})
       }
-      setPosts(feedRes.data.map((row: any) => rowPost(row, userId, serverRevisions[row.id] || localRevisions[row.id] || [])))
+      setPosts(feedRes.data.map((row: any) => rowPost(row, userId, serverRevisions[row.id] || localRevisions[row.id] || [], localMedia[row.id] || [])))
     }
     if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile))
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
@@ -155,26 +180,33 @@ export function useSocialApp() {
 
   const signOut = async () => { if (supabase) await supabase.auth.signOut() }
 
-  const createPost = async (body: string, image?: File | null, visibility: 'public' | 'followers' = 'public') => {
-    if (!profile || !body.trim() && !image) return false
+  const createPost = async (body: string, images: File[] = [], visibility: 'public' | 'followers' = 'public') => {
+    if (!profile || !body.trim() && !images.length) return false
     setBusy(true); setError('')
     if (supabase && session) {
-      let imageUrl: string | null = null
-      if (image) {
+      const imageUrls: string[] = []
+      for (const image of images) {
         const ext = image.name.split('.').pop() || 'jpg'
         const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`
         const uploaded = await supabase.storage.from('post-media').upload(path, image)
         if (uploaded.error) { setError(uploaded.error.message); setBusy(false); return false }
-        imageUrl = supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl
+        imageUrls.push(supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl)
       }
-      const result = await supabase.from('posts').insert({ user_id: session.user.id, body: body.trim(), image_url: imageUrl, visibility }).select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').single()
+      const payload = { user_id: session.user.id, body: body.trim(), image_url: imageUrls[0] || null, image_urls: imageUrls, visibility }
+      let result = await supabase.from('posts').insert(payload).select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').single()
+      if (result.error && (result.error.code === 'PGRST204' || result.error.message.includes('image_urls'))) {
+        const compatibleImageValue = imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0] || null
+        result = await supabase.from('posts').insert({ user_id: session.user.id, body: body.trim(), image_url: compatibleImageValue, visibility }).select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').single()
+        if (result.data && imageUrls.length > 1) {
+          const localMedia = readLocalMedia(); localMedia[result.data.id] = imageUrls; writeLocalMedia(localMedia)
+        }
+      }
       if (result.error) setError(result.error.message)
-      else if (result.data) setPosts((current) => [rowPost(result.data, session.user.id), ...current])
+      else if (result.data) setPosts((current) => [rowPost(result.data, session.user.id, [], imageUrls), ...current])
       setBusy(false); return !result.error
     }
-    let imageUrl: string | undefined
-    if (image) imageUrl = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(image) })
-    const post: Post = { id: crypto.randomUUID(), author: profile, body: body.trim(), imageUrl, createdAt: new Date().toISOString(), likes: 0, liked: false, likedBy: [], revisions: [], comments: [], visibility }
+    const imageUrls = await Promise.all(images.map(fileToDataUrl))
+    const post: Post = { id: crypto.randomUUID(), author: profile, body: body.trim(), imageUrl: imageUrls[0], imageUrls, createdAt: new Date().toISOString(), likes: 0, liked: false, likedBy: [], revisions: [], comments: [], visibility }
     const next = [post, ...posts]; setPosts(next); persist({ posts: next }); setBusy(false); return true
   }
 
@@ -219,6 +251,7 @@ export function useSocialApp() {
     }
     const next = posts.filter((post) => post.id !== postId)
     const localRevisions = readLocalRevisions(); delete localRevisions[postId]; writeLocalRevisions(localRevisions)
+    const localMedia = readLocalMedia(); delete localMedia[postId]; writeLocalMedia(localMedia)
     setPosts(next); persist({ posts: next }); setBusy(false); return true
   }
 
@@ -320,7 +353,7 @@ export function useSocialApp() {
     if (supabase) await supabase.from('reports').update({ status }).eq('id', id)
   }
 
-  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); location.reload() }
+  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); location.reload() }
 
   return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, notices, reports, busy, error,
     authenticate, signOut, createPost, updatePost, deletePost, toggleLike, addComment, toggleFollow, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }

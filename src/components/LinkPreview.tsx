@@ -13,6 +13,17 @@ export function firstUrl(text: string) {
   return match ? cleanUrl(match) : ''
 }
 
+export function textWithoutPreviewUrl(text: string) {
+  const match = URL_PATTERN.exec(text)
+  URL_PATTERN.lastIndex = 0
+  if (!match) return text
+  const url = cleanUrl(match[0])
+  return `${text.slice(0, match.index)}${text.slice(match.index + url.length)}`
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export function LinkifiedText({ text }: { text: string }) {
   const parts: Array<string | { url: string }> = []
   let cursor = 0
@@ -51,13 +62,13 @@ export function LinkPreview({ text, posts, currentPostId }: { text: string; post
   const linkedPost = postId && postId !== currentPostId ? posts.find((post) => post.id === postId) : undefined
   if (linkedPost) return <a className="link-preview internal-preview" href={`#/post/${encodeURIComponent(linkedPost.id)}/comments`}>
     <div className="preview-author"><Avatar profile={linkedPost.author} size={36} /><div><strong>{linkedPost.author.fullName}</strong><small>@{linkedPost.author.username} · Gedeeld bericht</small></div></div>
-    {linkedPost.body && <p>{linkedPost.body}</p>}
+    {textWithoutPreviewUrl(linkedPost.body) && <p>{textWithoutPreviewUrl(linkedPost.body)}</p>}
     {linkedPost.imageUrl && <img src={linkedPost.imageUrl} alt={`Afbeelding van ${linkedPost.author.fullName}`} loading="lazy" />}
     <span className="preview-open"><LinkIcon /> Bekijk volledig bericht</span>
   </a>
 
   return <a className="link-preview external-preview" href={url.toString()} target="_blank" rel="noreferrer">
     <span className="external-preview-icon"><ExternalLink /></span>
-    <div><strong>{url.hostname.replace(/^www\./, '')}</strong><span>{url.pathname === '/' ? 'Open deze link' : readablePath(url.pathname)}</span><small>{url.toString()}</small></div>
+    <div><strong>{url.hostname.replace(/^www\./, '')}</strong><span>{url.pathname === '/' ? 'Open deze link' : readablePath(url.pathname)}</span><small>Tik om te openen</small></div>
   </a>
 }

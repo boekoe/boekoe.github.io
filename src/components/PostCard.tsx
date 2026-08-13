@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Ban, Ellipsis, Flag, Heart, History, LoaderCircle, MessageCircle, Pencil, Share2, Trash2, UserRound, Users } from 'lucide-react'
 import type { Post, Profile } from '../types'
 import { Avatar, Modal, Name } from './ui'
-import { ImageViewer } from './ImageViewer'
-import { LinkifiedText, LinkPreview } from './LinkPreview'
+import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './LinkPreview'
+import { PostImages } from './PostImages'
 
 function ago(value: string) {
   const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
@@ -19,7 +19,6 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
 }) {
   const [menu, setMenu] = useState(false)
   const [reporting, setReporting] = useState(false)
-  const [viewingImage, setViewingImage] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [sharingProfile, setSharingProfile] = useState(false)
   const [caption, setCaption] = useState('')
@@ -64,9 +63,9 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
         </div>}
       </div>
     </header>
-    {post.body && <div className="post-body"><LinkifiedText text={post.body} /></div>}
+    {textWithoutPreviewUrl(post.body) && <div className="post-body"><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></div>}
     <LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} />
-    {post.imageUrl && <button type="button" className="post-image-button" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img className="post-image" src={post.imageUrl} alt="Afbeelding bij bericht" loading="lazy" /></button>}
+    <PostImages urls={post.imageUrls} authorName={post.author.fullName} />
     <div className="post-stats">
       <button onClick={() => post.likes > 0 && setLikers(true)} disabled={post.likes === 0}>{post.likes ? `${post.likes} ${post.likes === 1 ? 'like' : 'likes'}` : 'Wees de eerste'}</button>
       <button onClick={onOpenComments}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
@@ -92,6 +91,5 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
         <div className="reason-list">{['Spam of ongewenste reclame', 'Haatdragend of intimiderend', 'Misleidende informatie', 'Naakt of gewelddadig beeld', 'Iets anders'].map((reason) => <button key={reason} onClick={() => { onReport(reason); setReporting(false); onToast('Melding ontvangen. Bedankt.') }}>{reason}<span>›</span></button>)}</div>
       </div>
     </Modal>}
-    {viewingImage && post.imageUrl && <ImageViewer src={post.imageUrl} alt={`Afbeelding bij bericht van ${post.author.fullName}`} onClose={() => setViewingImage(false)} />}
   </article>
 }

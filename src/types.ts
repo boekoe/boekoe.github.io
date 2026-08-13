@@ -24,6 +24,7 @@ export type Post = {
   author: Profile
   body: string
   imageUrl?: string
+  imageUrls: string[]
   createdAt: string
   updatedAt?: string
   likes: number

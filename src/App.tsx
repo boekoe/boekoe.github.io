@@ -10,7 +10,8 @@ import { AuthScreen } from './components/AuthScreen'
 import { PostCard } from './components/PostCard'
 import { Avatar, BrandMark, EmptyState, Modal, Name, Toast } from './components/ui'
 import { ImageViewer } from './components/ImageViewer'
-import { LinkifiedText, LinkPreview } from './components/LinkPreview'
+import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './components/LinkPreview'
+import { PostImages } from './components/PostImages'
 
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
@@ -56,34 +57,34 @@ function friendshipLabel(status: FriendshipStatus) {
   return 'Vriend toevoegen'
 }
 
-function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onPost: (body: string, file: File | null, visibility: 'public' | 'followers') => Promise<boolean> }) {
+function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onPost: (body: string, files: File[], visibility: 'public' | 'followers') => Promise<boolean> }) {
   const [body, setBody] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [visibility, setVisibility] = useState<'public' | 'followers'>('public')
   const input = useRef<HTMLInputElement>(null)
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
-  const choose = (next: File | undefined) => {
-    if (!next) return
-    if (!next.type.startsWith('image/') || next.size > 8 * 1024 * 1024) return
-    setFile(next); setPreview(URL.createObjectURL(next))
+  const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
+  useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
+  const choose = (selected: FileList | null) => {
+    const next = Array.from(selected || []).filter((file) => file.type.startsWith('image/') && file.size <= 8 * 1024 * 1024)
+    if (next.length) setFiles((current) => [...current, ...next].slice(0, 4))
+    if (input.current) input.current.value = ''
   }
   const submit = async () => {
-    if (!body.trim() && !file) return
-    if (await onPost(body, file, visibility)) { setBody(''); setFile(null); setPreview('') }
+    if (!body.trim() && !files.length) return
+    if (await onPost(body, files, visibility)) { setBody(''); setFiles([]) }
   }
   return <section className="card composer">
     <Avatar profile={profile} size={44} />
     <div className="composer-main">
       <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder={`Wat wil je delen, ${profile.fullName.split(' ')[0]}?`} />
       <LinkPreview text={body} posts={posts} />
-      {preview && <div className="image-preview"><img src={preview} alt="Voorbeeld upload" /><button className="icon-button" onClick={() => { setFile(null); setPreview('') }}><X /></button></div>}
+      {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
       <div className="composer-tools">
-        <button className="tool-button" onClick={() => input.current?.click()}><Image size={20} /><span>Foto</span></button>
-        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => choose(event.target.files?.[0])} />
+        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 4}><Image size={20} /><span>{files.length ? `${files.length}/4 foto's` : "Foto's"}</span></button>
+        <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden onChange={(event) => choose(event.target.files)} />
         <select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)} aria-label="Zichtbaarheid"><option value="public">Iedereen</option><option value="followers">Volgers</option></select>
         <span className="char-count">{body.length}/2000</span>
-        <button className="primary compact" disabled={busy || (!body.trim() && !file)} onClick={submit}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Plaatsen'}</button>
+        <button className="primary compact" disabled={busy || (!body.trim() && !files.length)} onClick={submit}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Plaatsen'}</button>
       </div>
     </div>
   </section>
@@ -132,14 +133,13 @@ function ProfilePage({ profile, currentId, posts, following, followers, onFriend
     <button type="button" className={`cover ${profile.coverUrl ? 'has-image' : ''}`} style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined} onClick={() => profile.coverUrl && setViewingImage({ src: profile.coverUrl, alt: `Omslagfoto van ${profile.fullName}` })} disabled={!profile.coverUrl} aria-label={profile.coverUrl ? 'Omslagfoto openen en inzoomen' : 'Geen omslagfoto'}><div className="cover-pattern" /></button>
     <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <button className={friendState === 'none' || friendState === 'incoming' ? 'primary edit-profile' : 'secondary edit-profile'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
     {isMine && <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>}
-  </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}><p><LinkifiedText text={post.body} /></p><LinkPreview text={post.body} posts={posts} currentPostId={post.id} />{post.imageUrl && <button type="button" onClick={() => setViewingImage({ src: post.imageUrl!, alt: `Afbeelding bij bericht van ${profile.fullName}` })} aria-label="Afbeelding openen en inzoomen"><img src={post.imageUrl} alt="" /></button>}<small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
+  </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}>{textWithoutPreviewUrl(post.body) && <p><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></p>}<LinkPreview text={post.body} posts={posts} currentPostId={post.id} /><PostImages urls={post.imageUrls} authorName={profile.fullName} className="profile-post-images" /><small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
     {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} onClose={() => setViewingImage(null)} />}
   </div>
 }
 
 function CommentPage({ post, allPosts, profile, busy, onBack, onComment }: { post: ReturnType<typeof useSocialApp>['posts'][number] | undefined; allPosts: ReturnType<typeof useSocialApp>['posts']; profile: Profile; busy: boolean; onBack: () => void; onComment: (body: string) => Promise<void> }) {
   const [body, setBody] = useState('')
-  const [viewingImage, setViewingImage] = useState(false)
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!body.trim() || busy) return
@@ -150,11 +150,10 @@ function CommentPage({ post, allPosts, profile, busy, onBack, onComment }: { pos
   return <div className="page-stack thread-page">
     <section className="card thread-card">
       <header className="thread-title"><button className="icon-button" onClick={onBack} aria-label="Terug"><ArrowLeft /></button><div><h1>Reacties</h1><p>Praat mee met de community</p></div></header>
-      <article className="thread-original"><div className="thread-author"><Avatar profile={post.author} size={46} /><div><Name profile={post.author} /><small>@{post.author.username} · {timeAgo(post.createdAt)}</small></div></div>{post.body && <p><LinkifiedText text={post.body} /></p>}<LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} />{post.imageUrl && <button type="button" className="thread-image" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img src={post.imageUrl} alt="Afbeelding bij bericht" /></button>}</article>
+      <article className="thread-original"><div className="thread-author"><Avatar profile={post.author} size={46} /><div><Name profile={post.author} /><small>@{post.author.username} · {timeAgo(post.createdAt)}</small></div></div>{textWithoutPreviewUrl(post.body) && <p><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></p>}<LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} /><PostImages urls={post.imageUrls} authorName={post.author.fullName} className="thread-images" /></article>
       <form className="thread-compose" onSubmit={submit}><Avatar profile={profile} size={40} /><div><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} placeholder={`Schrijf je reactie, ${profile.fullName.split(' ')[0]}…`} aria-label="Reactie schrijven" /><div><span>{body.length}/1000</span><button className="primary compact" disabled={!body.trim() || busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <><Send size={17} /> Reageren</>}</button></div></div></form>
       <div className="thread-comments"><h2>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</h2>{post.comments.length ? post.comments.map((comment) => <article className="thread-comment" key={comment.id}><Avatar profile={comment.author} size={38} /><div><Name profile={comment.author} /><p>{comment.body}</p><small>{timeAgo(comment.createdAt)}</small></div></article>) : <EmptyState icon={<MessageCircle />} title="Nog geen reacties" text="Schrijf de eerste reactie op dit bericht." />}</div>
     </section>
-    {viewingImage && post.imageUrl && <ImageViewer src={post.imageUrl} alt={`Afbeelding bij bericht van ${post.author.fullName}`} onClose={() => setViewingImage(false)} />}
   </div>
 }
 
@@ -212,7 +211,7 @@ export default function App() {
       setView(next); setProfileUsername(next === 'profile' ? profile.username : ''); setMobileMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' })
     } else window.location.hash = hash
   }
-  const post = async (body: string, file: File | null, visibility: 'public' | 'followers') => { const ok = await store.createPost(body, file, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
+  const post = async (body: string, files: File[], visibility: 'public' | 'followers') => { const ok = await store.createPost(body, files, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
   const friendAction = async (id: string) => {
     const status = friendshipStatus(id, store.following, store.followers)
     if (status === 'friends') return
@@ -223,7 +222,7 @@ export default function App() {
     const url = new URL(import.meta.env.BASE_URL, window.location.origin)
     url.hash = `/post/${encodeURIComponent(item.id)}`
     const sharedBody = [caption.trim(), url.toString()].filter(Boolean).join('\n\n')
-    return store.createPost(sharedBody, null, 'public')
+    return store.createPost(sharedBody, [], 'public')
   }
 
   return <div className="app-shell">
