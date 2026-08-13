@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
+import { BrandMark } from './ui'
 
 export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: string; onSubmit: (mode: 'login' | 'signup', email: string, password: string, fullName?: string, username?: string) => Promise<{ ok: boolean; message: string }> }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -12,7 +13,7 @@ export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: st
     setMessage(result.message)
   }
   return <main className="auth-shell">
-    <section className="auth-brand"><div className="brand-mark large">B</div><h1>Boekoe</h1><p>Samen praten. Samen ontdekken.<br />Samen Suriname.</p><div className="flag-stripe" /></section>
+    <section className="auth-brand"><BrandMark large /><h1>Boekoe</h1><p>Samen praten. Samen ontdekken.<br />Samen Suriname.</p><div className="flag-stripe" /></section>
     <section className="auth-panel"><div className="auth-card">
       <div className="auth-tabs"><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Inloggen</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Account maken</button></div>
       <form onSubmit={submit} autoComplete="on">

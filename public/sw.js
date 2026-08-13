@@ -1,6 +1,6 @@
-const CACHE = 'boekoe-v1'
+const CACHE = 'boekoe-v2'
 const BASE = '/'
-const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`]
+const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`, `${BASE}icon-192.png`, `${BASE}icon-512.png`]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)))

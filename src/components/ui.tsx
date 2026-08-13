@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import { CheckCircle2, X } from 'lucide-react'
 import type { Profile } from '../types'
 
+export function BrandMark({ large = false }: { large?: boolean }) {
+  return <img className={`brand-mark${large ? ' large' : ''}`} src="/icon.svg" alt="" aria-hidden="true" />
+}
+
 export function Avatar({ profile, size = 44 }: { profile: Profile; size?: number }) {
   const initials = profile.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)
   return profile.avatarUrl

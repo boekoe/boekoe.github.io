@@ -8,7 +8,7 @@ import type { AppView, Profile } from './types'
 import { useSocialApp } from './lib/useSocialApp'
 import { AuthScreen } from './components/AuthScreen'
 import { PostCard } from './components/PostCard'
-import { Avatar, EmptyState, Modal, Name, Toast } from './components/ui'
+import { Avatar, BrandMark, EmptyState, Modal, Name, Toast } from './components/ui'
 
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
@@ -118,7 +118,7 @@ export default function App() {
   const unread = store.notices.filter((notice) => !notice.read).length
   const feed = useMemo(() => [...store.posts].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)), [store.posts])
 
-  if (!store.authReady) return <div className="loading-screen"><div className="brand-mark large">B</div><LoaderCircle className="spin" /></div>
+  if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
@@ -126,7 +126,7 @@ export default function App() {
   const post = async (body: string, file: File | null, visibility: 'public' | 'followers') => { const ok = await store.createPost(body, file, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
 
   return <div className="app-shell">
-    <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><span className="brand-mark">B</span><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
+    <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
     <div className="layout">
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}><div className="mobile-sidebar-head"><span>Menu</span><button className="icon-button" onClick={() => setMobileMenu(false)}><X /></button></div>
         <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}</nav>
