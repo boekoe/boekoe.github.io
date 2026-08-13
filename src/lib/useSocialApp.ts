@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import type { Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
-import { demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
+import type { DirectMessage, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
+import { demoMessages, demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
@@ -9,12 +9,25 @@ const REVISION_STORAGE_KEY = 'boekoe-post-revisions-v1'
 const MEDIA_STORAGE_KEY = 'boekoe-post-media-v1'
 const EXTRAS_STORAGE_KEY = 'boekoe-post-extras-v1'
 const PRIVATE_POSTS_STORAGE_KEY = 'boekoe-private-posts-v1'
+const MESSAGES_STORAGE_KEY = 'boekoe-direct-messages-v1'
 
-type DemoState = { posts: Post[]; following: string[]; followers: string[]; blocked: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
+type DemoState = { posts: Post[]; following: string[]; followers: string[]; blocked: string[]; notices: Notice[]; messages: DirectMessage[]; reports: Report[]; profile: Profile }
 type ProfileMedia = { avatar?: File | null; cover?: File | null }
 type PostExtras = Pick<Post, 'poll' | 'reaction' | 'reactionCounts' | 'visibility' | 'comments'>
 
-const demoDefaults: DemoState = { posts: demoPosts, following: ['p1', 'p4'], followers: ['p1', 'p5'], blocked: [], notices: demoNotices, reports: demoReports, profile: demoUser }
+const demoDefaults: DemoState = { posts: demoPosts, following: ['p1', 'p4'], followers: ['p1', 'p5'], blocked: [], notices: demoNotices, messages: demoMessages, reports: demoReports, profile: demoUser }
+
+function messageStorageKey(ownerId: string) {
+  return `${MESSAGES_STORAGE_KEY}:${ownerId}`
+}
+
+function readLocalMessages(ownerId: string): DirectMessage[] {
+  try { return JSON.parse(localStorage.getItem(messageStorageKey(ownerId)) || '[]') } catch { return [] }
+}
+
+function writeLocalMessages(ownerId: string, value: DirectMessage[]) {
+  localStorage.setItem(messageStorageKey(ownerId), JSON.stringify(value))
+}
 
 function readLocalRevisions(): Record<string, PostRevision[]> {
   try { return JSON.parse(localStorage.getItem(REVISION_STORAGE_KEY) || '{}') } catch { return {} }
@@ -71,7 +84,7 @@ function readDemo(): DemoState {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return demoDefaults
     const parsed = JSON.parse(saved)
-    return { ...demoDefaults, ...parsed, posts: (parsed.posts || demoPosts).map(normalizePost) }
+    return { ...demoDefaults, ...parsed, posts: (parsed.posts || demoPosts).map(normalizePost), messages: parsed.messages || demoMessages }
   } catch {
     return demoDefaults
   }
@@ -128,21 +141,22 @@ export function useSocialApp() {
   const [followers, setFollowers] = useState<string[]>(initial.followers)
   const [blocked, setBlocked] = useState<string[]>(initial.blocked)
   const [notices, setNotices] = useState<Notice[]>(hasSupabase ? [] : initial.notices)
+  const [messages, setMessages] = useState<DirectMessage[]>(hasSupabase ? [] : initial.messages)
   const [reports, setReports] = useState<Report[]>(hasSupabase ? [] : initial.reports)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const persist = useCallback((next: Partial<DemoState>) => {
     if (hasSupabase) return
-    const value = { posts, following, followers, blocked, notices, reports, profile: profile || demoUser, ...next }
+    const value = { posts, following, followers, blocked, notices, messages, reports, profile: profile || demoUser, ...next }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-  }, [posts, following, followers, blocked, notices, reports, profile])
+  }, [posts, following, followers, blocked, notices, messages, reports, profile])
 
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
     setBusy(true)
     const userId = activeSession.user.id
-    const [profileRes, feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes] = await Promise.all([
+    const [profileRes, feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes, messagesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('posts').select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').order('created_at', { ascending: false }).limit(50),
       supabase.from('profiles').select('*').limit(50),
@@ -150,6 +164,7 @@ export function useSocialApp() {
       supabase.from('follows').select('follower_id').eq('following_id', userId),
       supabase.from('blocks').select('blocked_id').eq('blocker_id', userId),
       supabase.from('notifications').select('*, actor:profiles!notifications_actor_id_fkey(*)').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
+      supabase.from('direct_messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order('created_at', { ascending: true }).limit(500),
     ])
     if (profileRes.data) setProfile(rowProfile(profileRes.data))
     if (feedRes.data) {
@@ -193,6 +208,10 @@ export function useSocialApp() {
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
     if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
+    if (messagesRes.data) {
+      const loaded = messagesRes.data.map((row: any): DirectMessage => ({ id: row.id, senderId: row.sender_id, recipientId: row.recipient_id, body: row.body, createdAt: row.created_at, read: row.read }))
+      setMessages(loaded); writeLocalMessages(userId, loaded)
+    } else setMessages(readLocalMessages(userId))
     if (profileRes.data?.is_admin) {
       const reportsRes = await supabase.from('reports').select('*').order('created_at', { ascending: false })
       if (reportsRes.data) setReports(reportsRes.data.map((row: any) => ({ id: row.id, reporter: row.reporter_name || 'Gebruiker', reason: row.reason, postId: row.post_id, excerpt: row.details || '', status: row.status, createdAt: row.created_at })))
@@ -219,6 +238,13 @@ export function useSocialApp() {
     if (!supabase || !session) return
     const client = supabase
     const channel = client.channel('boekoe-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => loadOnline(session)).subscribe()
+    return () => { client.removeChannel(channel) }
+  }, [session, loadOnline])
+
+  useEffect(() => {
+    if (!supabase || !session) return
+    const client = supabase
+    const channel = client.channel(`boekoe-messages-${session.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => loadOnline(session)).subscribe()
     return () => { client.removeChannel(channel) }
   }, [session, loadOnline])
 
@@ -416,6 +442,27 @@ export function useSocialApp() {
     }
   }
 
+  const sendMessage = async (recipientId: string, body: string) => {
+    if (!profile || recipientId === profile.id || !body.trim() || blocked.includes(recipientId)) return false
+    const message: DirectMessage = { id: crypto.randomUUID(), senderId: profile.id, recipientId, body: body.trim(), createdAt: new Date().toISOString(), read: false }
+    setBusy(true); setError('')
+    if (supabase && session) {
+      const result = await supabase.from('direct_messages').insert({ id: message.id, sender_id: session.user.id, recipient_id: recipientId, body: message.body }).select('id,created_at').single()
+      if (result.data) { message.id = result.data.id; message.createdAt = result.data.created_at }
+      if (result.error && !result.error.message.toLowerCase().includes('direct_messages')) setError(result.error.message)
+    }
+    const next = [...messages, message]
+    setMessages(next); writeLocalMessages(profile.id, next); persist({ messages: next }); setBusy(false)
+    return true
+  }
+
+  const markMessageThreadRead = async (otherUserId: string) => {
+    if (!profile) return
+    const next = messages.map((message) => message.senderId === otherUserId && message.recipientId === profile.id ? { ...message, read: true } : message)
+    setMessages(next); writeLocalMessages(profile.id, next); persist({ messages: next })
+    if (supabase && session) await supabase.from('direct_messages').update({ read: true }).eq('sender_id', otherUserId).eq('recipient_id', session.user.id).eq('read', false)
+  }
+
   const submitReport = async (postId: string, reason: string) => {
     const target = posts.find((post) => post.id === postId)
     if (!target || !profile) return
@@ -427,8 +474,9 @@ export function useSocialApp() {
   const blockUser = async (userId: string) => {
     if (!profile || userId === profile.id) return false
     const nextBlocked = [...new Set([...blocked, userId])]
-    setBlocked(nextBlocked); setPosts((current) => current.filter((post) => post.author.id !== userId)); setProfiles((current) => current.filter((person) => person.id !== userId)); setFollowing((current) => current.filter((id) => id !== userId)); setFollowers((current) => current.filter((id) => id !== userId))
-    persist({ blocked: nextBlocked, posts: posts.filter((post) => post.author.id !== userId), following: following.filter((id) => id !== userId), followers: followers.filter((id) => id !== userId) })
+    const nextMessages = messages.filter((message) => message.senderId !== userId && message.recipientId !== userId)
+    setBlocked(nextBlocked); setPosts((current) => current.filter((post) => post.author.id !== userId)); setProfiles((current) => current.filter((person) => person.id !== userId)); setFollowing((current) => current.filter((id) => id !== userId)); setFollowers((current) => current.filter((id) => id !== userId)); setMessages(nextMessages); writeLocalMessages(profile.id, nextMessages)
+    persist({ blocked: nextBlocked, posts: posts.filter((post) => post.author.id !== userId), following: following.filter((id) => id !== userId), followers: followers.filter((id) => id !== userId), messages: nextMessages })
     if (supabase && session) await supabase.from('blocks').insert({ blocker_id: session.user.id, blocked_id: userId })
     return true
   }
@@ -499,8 +547,8 @@ export function useSocialApp() {
     if (supabase) await supabase.from('reports').update({ status }).eq('id', id)
   }
 
-  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); location.reload() }
+  const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
-  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, reports, busy, error,
-    authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, messages, reports, busy, error,
+    authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

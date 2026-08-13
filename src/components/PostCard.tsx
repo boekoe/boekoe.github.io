@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
-import { Ban, Ellipsis, Flag, Forward, Globe2, Heart, LoaderCircle, Lock, MessageCircle, Pencil, ThumbsUp, Trash2, UserRound, Users } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Ban, CircleAlert, Ellipsis, Flag, Flame, Forward, Frown, Globe2, Heart, Laugh, LoaderCircle, Lock, MessageCircle, Pencil, ThumbsUp, Trash2, UserRound, Users } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { Post, Profile, ReactionType } from '../types'
 import { Avatar, Modal, Name } from './ui'
 import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './LinkPreview'
@@ -13,9 +14,9 @@ function ago(value: string) {
   return `${Math.floor(seconds / 86400)} d.`
 }
 
-const reactions: Array<{ type: ReactionType; emoji: string; label: string }> = [
-  { type: 'like', emoji: '👍', label: 'Leuk' }, { type: 'love', emoji: '❤️', label: 'Geweldig' }, { type: 'laugh', emoji: '😂', label: 'Grappig' },
-  { type: 'wow', emoji: '😮', label: 'Wauw' }, { type: 'sad', emoji: '😢', label: 'Verdrietig' }, { type: 'fire', emoji: '🔥', label: 'Vuur' },
+const reactions: Array<{ type: ReactionType; icon: LucideIcon; label: string }> = [
+  { type: 'like', icon: ThumbsUp, label: 'Leuk' }, { type: 'love', icon: Heart, label: 'Geweldig' }, { type: 'laugh', icon: Laugh, label: 'Grappig' },
+  { type: 'wow', icon: CircleAlert, label: 'Wauw' }, { type: 'sad', icon: Frown, label: 'Verdrietig' }, { type: 'fire', icon: Flame, label: 'Vuur' },
 ]
 
 export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReaction, onVote, onEdit, onDelete, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
@@ -34,11 +35,18 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReac
   const [reactionPicker, setReactionPicker] = useState(false)
   const longPressTimer = useRef<number | null>(null)
   const longPressed = useRef(false)
+  const reactionArea = useRef<HTMLDivElement>(null)
   const isMine = post.author.id === currentUserId
   const knownLikers = post.likedBy.map((id) => profiles.find((profile) => profile.id === id)).filter((profile): profile is Profile => Boolean(profile))
   const unknownLikers = Math.max(0, post.likes - knownLikers.length)
   const activeReaction = reactions.find((item) => item.type === post.reaction)
   const totalVotes = post.poll?.options.reduce((total, option) => total + option.votes, 0) || 0
+  useEffect(() => {
+    if (!reactionPicker) return
+    const close = (event: PointerEvent) => { if (!reactionArea.current?.contains(event.target as Node)) setReactionPicker(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [reactionPicker])
   const shareExternal = async () => {
     const url = new URL(import.meta.env.BASE_URL, window.location.origin)
     url.hash = `/post/${encodeURIComponent(post.id)}`
@@ -78,11 +86,11 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReac
     <PostImages urls={post.imageUrls} authorName={post.author.fullName} />
     {post.poll && <section className="post-poll"><h3>{post.poll.question}</h3><div className="poll-options">{post.poll.options.map((option) => { const percentage = totalVotes ? Math.round(option.votes / totalVotes * 100) : 0; return <button type="button" className={post.poll?.votedOptionId === option.id ? 'voted' : ''} key={option.id} onClick={() => onVote(option.id)}><span className="poll-fill" style={{ width: `${percentage}%` }} /><span className="poll-label">{option.text}</span><strong>{percentage}%</strong></button> })}</div><small>{totalVotes} {totalVotes === 1 ? 'stem' : 'stemmen'} · Tik om te stemmen</small></section>}
     <div className="post-stats">
-      <button onClick={() => post.likes > 0 && setLikers(true)} disabled={post.likes === 0}>{post.likes ? <>{reactions.filter((item) => (post.reactionCounts[item.type] || 0) > 0).slice(0, 3).map((item) => <span className="stat-reaction" key={item.type}>{item.emoji}</span>)} {post.likes}</> : 'Wees de eerste'}</button>
+      <button onClick={() => post.likes > 0 && setLikers(true)} disabled={post.likes === 0}>{post.likes ? <>{reactions.filter((item) => (post.reactionCounts[item.type] || 0) > 0).slice(0, 3).map((item) => <span className={`stat-reaction ${item.type}`} key={item.type}><item.icon /></span>)} {post.likes}</> : 'Wees de eerste'}</button>
       <button onClick={onOpenComments}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
     </div>
     <div className="post-actions">
-      <div className="reaction-action" onMouseEnter={() => setReactionPicker(true)} onMouseLeave={() => setReactionPicker(false)}>{reactionPicker && <div className="reaction-picker" role="menu">{reactions.map((item) => <button type="button" key={item.type} onClick={() => { onReaction(item.type); setReactionPicker(false) }} aria-label={item.label} title={item.label}>{item.emoji}</button>)}</div>}<button className={post.liked ? 'liked' : ''} onClick={() => { if (longPressed.current) { longPressed.current = false; return } onReaction(post.reaction || 'like') }} onPointerDown={(event) => { if (event.pointerType === 'touch') { longPressed.current = false; longPressTimer.current = window.setTimeout(() => { longPressed.current = true; setReactionPicker(true) }, 480) } }} onPointerUp={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current) }} onPointerCancel={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current) }} aria-label={activeReaction?.label || 'Leuk vinden'} title={activeReaction?.label || 'Leuk vinden'}>{activeReaction ? <span className="active-reaction">{activeReaction.emoji}</span> : <ThumbsUp />}</button></div>
+      <div ref={reactionArea} className="reaction-action" onMouseEnter={() => setReactionPicker(true)} onMouseLeave={() => setReactionPicker(false)}>{reactionPicker && <div className="reaction-picker" role="menu" aria-label="Kies een reactie">{reactions.map((item) => <button type="button" className={item.type} key={item.type} onClick={() => { onReaction(item.type); setReactionPicker(false) }} aria-label={item.label} title={item.label}><item.icon /></button>)}</div>}<button className={post.liked ? `liked ${post.reaction || 'like'}` : ''} onClick={() => { if (longPressed.current) { longPressed.current = false; return } onReaction(post.reaction || 'like') }} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (event.pointerType === 'touch' || event.pointerType === 'pen') { longPressed.current = false; longPressTimer.current = window.setTimeout(() => { longPressed.current = true; setReactionPicker(true); navigator.vibrate?.(18) }, 420) } }} onPointerUp={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }} onPointerCancel={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }} aria-label={activeReaction?.label || 'Leuk vinden'} title={activeReaction?.label || 'Leuk vinden'}>{activeReaction ? <span className={`active-reaction ${activeReaction.type}`}><activeReaction.icon /></span> : <ThumbsUp />}</button></div>
       <button onClick={onOpenComments} aria-label="Reageren" title="Reageren"><MessageCircle /></button>
       <button onClick={() => setSharing(true)} aria-label="Delen" title="Delen"><Forward /></button>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, Ban, BarChart3, Bell, Camera, Check, ChevronDown, ChevronRight, Compass, Flag, Globe2, Heart, Home, Image, LoaderCircle,
-  Lock, LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
+  Lock, LogOut, Menu, MessageCircle, MessagesSquare, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
   Sparkles, Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
 import type { AppView, Poll, Post, Profile } from './types'
@@ -12,11 +12,13 @@ import { Avatar, BrandMark, EmptyState, Modal, Name, Toast } from './components/
 import { ImageViewer } from './components/ImageViewer'
 import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './components/LinkPreview'
 import { PostImages } from './components/PostImages'
+import { Messages } from './components/Messages'
 
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
   { view: 'discover' as AppView, label: 'Ontdek', icon: Compass },
   { view: 'compose' as AppView, label: 'Plaatsen', icon: Plus, compose: true },
+  { view: 'messages' as AppView, label: 'Berichten', icon: MessagesSquare },
   { view: 'notifications' as AppView, label: 'Meldingen', icon: Bell },
   { view: 'profile' as AppView, label: 'Profiel', icon: UserRound },
 ]
@@ -35,6 +37,7 @@ function readHashRoute() {
   if (parts[0] === 'profile' && parts[1]) return { view: 'profile' as AppView, username: parts[1] }
   if (parts[0] === 'post' && parts[1] && parts[2] === 'comments') return { view: 'comments' as AppView, postId: parts[1] }
   if (parts[0] === 'post' && parts[1]) return { view: 'feed' as AppView, postId: parts[1] }
+  if (parts[0] === 'messages') return { view: 'messages' as AppView, recipientId: parts[1] }
   if (['feed', 'discover', 'compose', 'notifications', 'profile', 'moderation'].includes(parts[0])) return { view: parts[0] as AppView }
   return { view: 'feed' as AppView }
 }
@@ -141,14 +144,14 @@ function Notifications({ notices, following, onFriendAction, onOpenPost, onRead 
   </section>
 }
 
-function ProfilePage({ profile, currentId, posts, following, followers, onFriendAction, onBlock, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; followers: string[]; onFriendAction: (id: string) => void; onBlock: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
+function ProfilePage({ profile, currentId, posts, following, followers, onFriendAction, onMessage, onBlock, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; followers: string[]; onFriendAction: (id: string) => void; onMessage: (id: string) => void; onBlock: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
   const mine = posts.filter((post) => post.author.id === profile.id)
   const isMine = profile.id === currentId
   const friendState = friendshipStatus(profile.id, following, followers)
   const [viewingImage, setViewingImage] = useState<{ src: string; alt: string } | null>(null)
   return <div className="page-stack"><section className="card profile-card">
     <button type="button" className={`cover ${profile.coverUrl ? 'has-image' : ''}`} style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined} onClick={() => profile.coverUrl && setViewingImage({ src: profile.coverUrl, alt: `Omslagfoto van ${profile.fullName}` })} disabled={!profile.coverUrl} aria-label={profile.coverUrl ? 'Omslagfoto openen en inzoomen' : 'Geen omslagfoto'}><div className="cover-pattern" /></button>
-    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <div className="profile-actions"><button className={friendState === 'none' || friendState === 'incoming' ? 'primary' : 'secondary'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button><button className="secondary block-profile" onClick={() => onBlock(profile.id)} aria-label={`${profile.fullName} blokkeren`}><Ban /></button></div>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
+    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <div className="profile-actions"><button className={friendState === 'none' || friendState === 'incoming' ? 'primary' : 'secondary'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button><button className="secondary message-profile" onClick={() => onMessage(profile.id)} aria-label={`Privébericht aan ${profile.fullName}`}><MessagesSquare /></button><button className="secondary block-profile" onClick={() => onBlock(profile.id)} aria-label={`${profile.fullName} blokkeren`}><Ban /></button></div>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
     {isMine && <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>}
   </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}>{textWithoutPreviewUrl(post.body) && <p><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></p>}<LinkPreview text={post.body} posts={posts} currentPostId={post.id} /><PostImages urls={post.imageUrls} authorName={profile.fullName} className="profile-post-images" /><small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
     {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} onClose={() => setViewingImage(null)} />}
@@ -192,6 +195,7 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false)
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('boekoe-theme', dark ? 'dark' : 'light') }, [dark])
   const unread = store.notices.filter((notice) => !notice.read).length
+  const unreadMessages = store.messages.filter((message) => message.recipientId === store.profile?.id && !message.read).length
   const feed = useMemo(() => [...store.posts].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)), [store.posts])
   const allProfiles = useMemo(() => store.profile && !store.profiles.some((person) => person.id === store.profile?.id) ? [store.profile, ...store.profiles] : store.profiles, [store.profile, store.profiles])
   const viewedProfile = profileUsername ? allProfiles.find((person) => person.username.toLowerCase() === profileUsername.toLowerCase()) : store.profile
@@ -250,7 +254,7 @@ export default function App() {
     <header className="topbar"><div className="topbar-inner"><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Menu openen"><Menu /></button></div></div></header>
     <div className="layout">
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}><div className="mobile-sidebar-head"><span>Menu</span><button className="icon-button" onClick={() => setMobileMenu(false)}><X /></button></div>
-        <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}<button className="mobile-theme-toggle" onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />}<span>{dark ? 'Lichte modus' : 'Donkere modus'}</span></button></nav>
+        <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}<button className="mobile-theme-toggle" onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />}<span>{dark ? 'Lichte modus' : 'Donkere modus'}</span></button></nav>
         <button className="primary sidebar-post" onClick={() => go('compose')}><Plus /> Nieuw bericht</button><div className="sidebar-user"><Avatar profile={profile} size={42} /><div><Name profile={profile} /><small>@{profile.username}</small></div></div>
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
@@ -259,14 +263,15 @@ export default function App() {
         {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onProfile={() => go('profile')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpenPost={(postId) => { window.location.hash = `/post/${encodeURIComponent(postId)}` }} onRead={store.markNoticesRead} />}
-        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={readHashRoute().recipientId} busy={store.busy} onSelect={(id) => { window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onRead={store.markMessageThreadRead} />}
+        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
         {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
       </main>
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
-    <nav className="bottom-nav">{nav.map((item) => <button key={item.view} className={`${view === item.view ? 'active' : ''} ${item.compose ? 'compose-nav' : ''}`} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</span></button>)}</nav>
+    <nav className="bottom-nav">{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</span></button>)}</nav>
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>

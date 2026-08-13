@@ -1,4 +1,4 @@
-import type { Notice, Post, Profile, Report } from '../types'
+import type { DirectMessage, Notice, Post, Profile, Report } from '../types'
 
 export const demoUser: Profile = {
   id: 'me', username: 'danielvv', fullName: 'Daniel van Vuuren',
@@ -55,6 +55,12 @@ export const demoNotices: Notice[] = [
   { id: 'n2', kind: 'like', postId: 'post-2', actor: people[1], text: 'vindt je bericht leuk', createdAt: new Date(Date.now() - 75 * 60_000).toISOString(), read: false },
   { id: 'n3', kind: 'comment', postId: 'post-2', actor: people[4], text: 'reageerde: “Dit moeten we vaker doen!”', createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(), read: true },
   { id: 'n4', kind: 'system', text: 'Welkom bij Boekoe. Samen houden we het veilig en gezellig.', createdAt: new Date(Date.now() - 26 * 3_600_000).toISOString(), read: true },
+]
+
+export const demoMessages: DirectMessage[] = [
+  { id: 'dm-1', senderId: 'p1', recipientId: 'me', body: 'Hoi Daniel! Heb je de foto van de Waterkant gezien?', createdAt: new Date(Date.now() - 48 * 60_000).toISOString(), read: false },
+  { id: 'dm-2', senderId: 'me', recipientId: 'p4', body: 'Die meet-up klinkt goed. Waar spreken jullie af?', createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString(), read: true },
+  { id: 'dm-3', senderId: 'p4', recipientId: 'me', body: 'Zaterdag om 15:00 bij Tori Oso. Ik stuur je straks de details.', createdAt: new Date(Date.now() - 2.8 * 3_600_000).toISOString(), read: true },
 ]
 
 export const demoReports: Report[] = [

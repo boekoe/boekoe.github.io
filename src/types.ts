@@ -73,6 +73,15 @@ export type Notice = {
   read: boolean
 }
 
+export type DirectMessage = {
+  id: string
+  senderId: string
+  recipientId: string
+  body: string
+  createdAt: string
+  read: boolean
+}
+
 export type Report = {
   id: string
   reporter: string
@@ -83,4 +92,4 @@ export type Report = {
   createdAt: string
 }
 
-export type AppView = 'feed' | 'discover' | 'compose' | 'notifications' | 'profile' | 'moderation' | 'comments'
+export type AppView = 'feed' | 'discover' | 'compose' | 'notifications' | 'messages' | 'profile' | 'moderation' | 'comments'

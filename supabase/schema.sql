@@ -124,12 +124,24 @@ create table if not exists public.notifications (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.direct_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(body) between 1 and 2000),
+  read boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (sender_id <> recipient_id)
+);
+
 create index if not exists posts_created_at_idx on public.posts(created_at desc);
 create index if not exists posts_user_id_idx on public.posts(user_id);
 create index if not exists post_versions_post_id_idx on public.post_versions(post_id, created_at desc);
 create index if not exists comments_post_id_idx on public.comments(post_id, created_at);
 create index if not exists notifications_user_id_idx on public.notifications(user_id, created_at desc);
 create index if not exists reports_status_idx on public.reports(status, created_at desc);
+create index if not exists direct_messages_sender_idx on public.direct_messages(sender_id, created_at desc);
+create index if not exists direct_messages_recipient_idx on public.direct_messages(recipient_id, created_at desc);
 
 -- Automatically create a safe profile for every new account.
 create or replace function public.handle_new_user()
@@ -207,6 +219,8 @@ alter table public.follows enable row level security;
 alter table public.blocks enable row level security;
 alter table public.reports enable row level security;
 alter table public.notifications enable row level security;
+alter table public.direct_messages enable row level security;
+grant select, insert on public.direct_messages to authenticated;
 
 create policy "Profiles are visible to signed-in users" on public.profiles for select to authenticated using (
   id = auth.uid() or not exists (select 1 from public.blocks b where (b.blocker_id = auth.uid() and b.blocked_id = profiles.id) or (b.blocker_id = profiles.id and b.blocked_id = auth.uid()))
@@ -261,6 +275,26 @@ create policy "Admins update reports" on public.reports for update to authentica
 create policy "Users read notifications" on public.notifications for select to authenticated using (user_id = auth.uid());
 create policy "Users update notifications" on public.notifications for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+create policy "Participants read private messages" on public.direct_messages for select to authenticated using (
+  (sender_id = auth.uid() or recipient_id = auth.uid()) and
+  not exists (
+    select 1 from public.blocks b
+    where (b.blocker_id = auth.uid() and b.blocked_id in (direct_messages.sender_id, direct_messages.recipient_id))
+       or (b.blocked_id = auth.uid() and b.blocker_id in (direct_messages.sender_id, direct_messages.recipient_id))
+  )
+);
+create policy "Users send private messages" on public.direct_messages for insert to authenticated with check (
+  sender_id = auth.uid() and recipient_id <> auth.uid() and
+  not exists (
+    select 1 from public.blocks b
+    where (b.blocker_id = sender_id and b.blocked_id = recipient_id)
+       or (b.blocker_id = recipient_id and b.blocked_id = sender_id)
+  )
+);
+create policy "Recipients mark messages read" on public.direct_messages for update to authenticated using (recipient_id = auth.uid()) with check (recipient_id = auth.uid());
+revoke update on public.direct_messages from authenticated;
+grant update (read) on public.direct_messages to authenticated;
+
 -- Public media bucket. File ownership and an 8 MB browser limit are enforced by the app and folder policy.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('post-media', 'post-media', true, 8388608, array['image/jpeg','image/png','image/webp','image/gif'])
@@ -277,6 +311,15 @@ begin
     select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'posts'
   ) then
     alter publication supabase_realtime add table public.posts;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'direct_messages'
+  ) then
+    alter publication supabase_realtime add table public.direct_messages;
   end if;
 end $$;
 
