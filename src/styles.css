@@ -113,6 +113,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .image-preview { position: relative; min-height: 120px; overflow: hidden; background: var(--surface-2); }
 .image-preview img { display: block; width: 100%; height: 100%; max-height: 300px; object-fit: cover; }
 .image-preview button { position: absolute; right: 10px; top: 10px; background: rgba(0,0,0,.62); color: white; }
+.composer-error { margin: 2px 0 10px; padding: 9px 11px; border-radius: 10px; background: #fae3e6; color: var(--red); font-size: 12px; font-weight: 600; }
 
 .post-card { overflow: visible; }
 .post-header { padding: 17px 18px 10px; display: flex; gap: 11px; align-items: center; }

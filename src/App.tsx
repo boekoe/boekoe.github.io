@@ -60,27 +60,34 @@ function friendshipLabel(status: FriendshipStatus) {
 function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onPost: (body: string, files: File[], visibility: 'public' | 'followers') => Promise<boolean> }) {
   const [body, setBody] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [photoError, setPhotoError] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'followers'>('public')
   const input = useRef<HTMLInputElement>(null)
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
   const choose = (selected: FileList | null) => {
-    const next = Array.from(selected || []).filter((file) => file.type.startsWith('image/') && file.size <= 8 * 1024 * 1024)
-    if (next.length) setFiles((current) => [...current, ...next].slice(0, 40))
+    const chosen = Array.from(selected || [])
+    const next = chosen.filter((file) => file.type.startsWith('image/') && file.size <= 8 * 1024 * 1024)
+    const available = Math.max(0, 10 - files.length)
+    if (chosen.length !== next.length) setPhotoError('Alleen JPG, PNG, WebP of GIF tot 8 MB per foto is toegestaan.')
+    else if (next.length > available) setPhotoError(`Maximaal 10 foto’s per bericht. ${next.length - available} ${next.length - available === 1 ? 'foto is' : 'foto’s zijn'} niet toegevoegd.`)
+    else setPhotoError('')
+    if (next.length && available) setFiles((current) => [...current, ...next.slice(0, available)])
     if (input.current) input.current.value = ''
   }
   const submit = async () => {
     if (!body.trim() && !files.length) return
-    if (await onPost(body, files, visibility)) { setBody(''); setFiles([]) }
+    if (await onPost(body, files, visibility)) { setBody(''); setFiles([]); setPhotoError('') }
   }
   return <section className="card composer">
     <Avatar profile={profile} size={44} />
     <div className="composer-main">
       <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder={`Wat wil je delen, ${profile.fullName.split(' ')[0]}?`} />
       <LinkPreview text={body} posts={posts} />
-      {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
+      {photoError && <p className="composer-error" role="alert">{photoError}</p>}
+      {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); setPhotoError('') }} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
       <div className="composer-tools">
-        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 40}><Image size={20} /><span>{files.length ? `${files.length}/40 foto's` : "Foto's"}</span></button>
+        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 10}><Image size={20} /><span>{files.length ? `${files.length}/10 foto's` : "Foto's"}</span></button>
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden onChange={(event) => choose(event.target.files)} />
         <select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)} aria-label="Zichtbaarheid"><option value="public">Iedereen</option><option value="followers">Volgers</option></select>
         <span className="char-count">{body.length}/2000</span>
