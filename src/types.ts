@@ -17,6 +17,25 @@ export type Comment = {
   author: Profile
   body: string
   createdAt: string
+  parentId?: string
+  likes: number
+  liked: boolean
+  likedBy: string[]
+}
+
+export type ReactionType = 'like' | 'love' | 'laugh' | 'wow' | 'sad' | 'fire'
+
+export type PollOption = {
+  id: string
+  text: string
+  votes: number
+  voterIds: string[]
+}
+
+export type Poll = {
+  question: string
+  options: PollOption[]
+  votedOptionId?: string
 }
 
 export type Post = {
@@ -30,9 +49,12 @@ export type Post = {
   likes: number
   liked: boolean
   likedBy: string[]
+  reaction?: ReactionType
+  reactionCounts: Partial<Record<ReactionType, number>>
+  poll?: Poll
   revisions: PostRevision[]
   comments: Comment[]
-  visibility: 'public' | 'followers'
+  visibility: 'public' | 'private' | 'friends'
 }
 
 export type PostRevision = {

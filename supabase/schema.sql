@@ -24,22 +24,40 @@ create table if not exists public.posts (
   body text not null default '' check (char_length(body) <= 2000),
   image_url text,
   image_urls text[] not null default '{}',
-  visibility text not null default 'public' check (visibility in ('public', 'followers')),
+  visibility text not null default 'public' check (visibility in ('public', 'private', 'friends')),
+  poll_data jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (char_length(body) > 0 or image_url is not null)
+  check (char_length(body) > 0 or image_url is not null or poll_data is not null)
 );
 
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   post_id uuid not null references public.posts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
+  parent_id uuid references public.comments(id) on delete cascade,
   body text not null check (char_length(body) between 1 and 1000),
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.likes (
   post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  reaction_type text not null default 'like' check (reaction_type in ('like','love','laugh','wow','sad','fire')),
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+create table if not exists public.comment_likes (
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id)
+);
+
+create table if not exists public.poll_votes (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  option_id uuid not null,
   user_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
@@ -182,13 +200,17 @@ alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
 alter table public.comments enable row level security;
 alter table public.likes enable row level security;
+alter table public.comment_likes enable row level security;
+alter table public.poll_votes enable row level security;
 alter table public.post_versions enable row level security;
 alter table public.follows enable row level security;
 alter table public.blocks enable row level security;
 alter table public.reports enable row level security;
 alter table public.notifications enable row level security;
 
-create policy "Profiles are visible to signed-in users" on public.profiles for select to authenticated using (true);
+create policy "Profiles are visible to signed-in users" on public.profiles for select to authenticated using (
+  id = auth.uid() or not exists (select 1 from public.blocks b where (b.blocker_id = auth.uid() and b.blocked_id = profiles.id) or (b.blocker_id = profiles.id and b.blocked_id = auth.uid()))
+);
 create policy "Users edit their profile" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 -- Do not let a browser promote itself to admin or verified by calling the API directly.
 revoke update on public.profiles from authenticated;
@@ -196,8 +218,10 @@ grant update (username, full_name, bio, location, avatar_url, cover_url) on publ
 
 create policy "Visible posts can be read" on public.posts for select to authenticated using (
   user_id = auth.uid() or
-  (visibility = 'public' and not exists (select 1 from public.blocks b where b.blocker_id = auth.uid() and b.blocked_id = posts.user_id)) or
-  (visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = posts.user_id))
+  (not exists (select 1 from public.blocks b where (b.blocker_id = auth.uid() and b.blocked_id = posts.user_id) or (b.blocker_id = posts.user_id and b.blocked_id = auth.uid())) and (
+    visibility = 'public' or
+    (visibility = 'friends' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = posts.user_id) and exists (select 1 from public.follows f where f.follower_id = posts.user_id and f.following_id = auth.uid()))
+  ))
 );
 create policy "Users create their own posts" on public.posts for insert to authenticated with check (user_id = auth.uid());
 create policy "Authors update posts" on public.posts for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -210,6 +234,15 @@ create policy "Authors delete comments" on public.comments for delete to authent
 create policy "Likes are readable" on public.likes for select to authenticated using (true);
 create policy "Users create likes" on public.likes for insert to authenticated with check (user_id = auth.uid());
 create policy "Users remove likes" on public.likes for delete to authenticated using (user_id = auth.uid());
+create policy "Users change reactions" on public.likes for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create policy "Comment likes are readable" on public.comment_likes for select to authenticated using (true);
+create policy "Users like comments" on public.comment_likes for insert to authenticated with check (user_id = auth.uid());
+create policy "Users remove comment likes" on public.comment_likes for delete to authenticated using (user_id = auth.uid());
+
+create policy "Poll votes are readable" on public.poll_votes for select to authenticated using (true);
+create policy "Users vote in polls" on public.poll_votes for insert to authenticated with check (user_id = auth.uid());
+create policy "Users change poll vote" on public.poll_votes for delete to authenticated using (user_id = auth.uid());
 
 create policy "Versions follow post visibility" on public.post_versions for select to authenticated using (
   exists (select 1 from public.posts p where p.id = post_versions.post_id)
@@ -220,6 +253,7 @@ create policy "Users create follows" on public.follows for insert to authenticat
 create policy "Users remove follows" on public.follows for delete to authenticated using (follower_id = auth.uid());
 
 create policy "Users manage own blocks" on public.blocks for all to authenticated using (blocker_id = auth.uid()) with check (blocker_id = auth.uid());
+create policy "Users see blocks involving them" on public.blocks for select to authenticated using (blocker_id = auth.uid() or blocked_id = auth.uid());
 create policy "Users file reports" on public.reports for insert to authenticated with check (reporter_id = auth.uid());
 create policy "Users and admins see relevant reports" on public.reports for select to authenticated using (reporter_id = auth.uid() or exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin));
 create policy "Admins update reports" on public.reports for update to authenticated using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin));

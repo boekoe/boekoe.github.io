@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Ban, Ellipsis, Flag, Heart, History, LoaderCircle, MessageCircle, Pencil, Share2, Trash2, UserRound, Users } from 'lucide-react'
-import type { Post, Profile } from '../types'
+import { useRef, useState } from 'react'
+import { Ban, Ellipsis, Flag, Forward, Globe2, Heart, LoaderCircle, Lock, MessageCircle, Pencil, ThumbsUp, Trash2, UserRound, Users } from 'lucide-react'
+import type { Post, Profile, ReactionType } from '../types'
 import { Avatar, Modal, Name } from './ui'
 import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './LinkPreview'
 import { PostImages } from './PostImages'
@@ -13,8 +13,13 @@ function ago(value: string) {
   return `${Math.floor(seconds / 86400)} d.`
 }
 
-export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike, onEdit, onDelete, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
-  post: Post; allPosts: Post[]; profiles: Profile[]; currentUserId: string; busy: boolean; onLike: () => void; onEdit: (body: string) => Promise<boolean>; onDelete: () => Promise<boolean>; onOpenComments: () => void; onShareProfile: (caption: string) => Promise<boolean>
+const reactions: Array<{ type: ReactionType; emoji: string; label: string }> = [
+  { type: 'like', emoji: '👍', label: 'Leuk' }, { type: 'love', emoji: '❤️', label: 'Geweldig' }, { type: 'laugh', emoji: '😂', label: 'Grappig' },
+  { type: 'wow', emoji: '😮', label: 'Wauw' }, { type: 'sad', emoji: '😢', label: 'Verdrietig' }, { type: 'fire', emoji: '🔥', label: 'Vuur' },
+]
+
+export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReaction, onVote, onEdit, onDelete, onOpenComments, onShareProfile, onReport, onBlock, onToast }: {
+  post: Post; allPosts: Post[]; profiles: Profile[]; currentUserId: string; busy: boolean; onReaction: (reaction: ReactionType) => void; onVote: (optionId: string) => void; onEdit: (body: string) => Promise<boolean>; onDelete: () => Promise<boolean>; onOpenComments: () => void; onShareProfile: (caption: string) => Promise<boolean>
   onReport: (reason: string) => void; onBlock: () => void; onToast: (message: string) => void
 }) {
   const [menu, setMenu] = useState(false)
@@ -26,9 +31,14 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
   const [editBody, setEditBody] = useState(post.body)
   const [history, setHistory] = useState(false)
   const [likers, setLikers] = useState(false)
+  const [reactionPicker, setReactionPicker] = useState(false)
+  const longPressTimer = useRef<number | null>(null)
+  const longPressed = useRef(false)
   const isMine = post.author.id === currentUserId
   const knownLikers = post.likedBy.map((id) => profiles.find((profile) => profile.id === id)).filter((profile): profile is Profile => Boolean(profile))
   const unknownLikers = Math.max(0, post.likes - knownLikers.length)
+  const activeReaction = reactions.find((item) => item.type === post.reaction)
+  const totalVotes = post.poll?.options.reduce((total, option) => total + option.votes, 0) || 0
   const shareExternal = async () => {
     const url = new URL(import.meta.env.BASE_URL, window.location.origin)
     url.hash = `/post/${encodeURIComponent(post.id)}`
@@ -55,7 +65,7 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
   return <article className="card post-card" id={`post-${post.id}`}>
     <header className="post-header">
       <Avatar profile={post.author} size={46} />
-      <div className="post-by"><Name profile={post.author} /><span>@{post.author.username} · {ago(post.createdAt)} {post.revisions.length > 0 && <button className="edited-label" onClick={() => setHistory(true)}>· Bewerkt</button>} {post.visibility === 'followers' && <Users size={12} />}</span></div>
+      <div className="post-by"><Name profile={post.author} /><span>@{post.author.username} · {ago(post.createdAt)} {post.revisions.length > 0 && <button className="edited-label" onClick={() => setHistory(true)}>· Bewerkt</button>} {post.visibility === 'friends' ? <Users size={12} aria-label="Alleen vrienden" /> : post.visibility === 'private' ? <Lock size={12} aria-label="Private" /> : <Globe2 size={12} aria-label="Iedereen" />}</span></div>
       <div className="menu-wrap">
         <button className="icon-button subtle" onClick={() => setMenu(!menu)} aria-label="Meer opties"><Ellipsis /></button>
         {menu && <div className="popover">
@@ -66,14 +76,15 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
     {textWithoutPreviewUrl(post.body) && <div className="post-body"><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></div>}
     <LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} />
     <PostImages urls={post.imageUrls} authorName={post.author.fullName} />
+    {post.poll && <section className="post-poll"><h3>{post.poll.question}</h3><div className="poll-options">{post.poll.options.map((option) => { const percentage = totalVotes ? Math.round(option.votes / totalVotes * 100) : 0; return <button type="button" className={post.poll?.votedOptionId === option.id ? 'voted' : ''} key={option.id} onClick={() => onVote(option.id)}><span className="poll-fill" style={{ width: `${percentage}%` }} /><span className="poll-label">{option.text}</span><strong>{percentage}%</strong></button> })}</div><small>{totalVotes} {totalVotes === 1 ? 'stem' : 'stemmen'} · Tik om te stemmen</small></section>}
     <div className="post-stats">
-      <button onClick={() => post.likes > 0 && setLikers(true)} disabled={post.likes === 0}>{post.likes ? `${post.likes} ${post.likes === 1 ? 'like' : 'likes'}` : 'Wees de eerste'}</button>
+      <button onClick={() => post.likes > 0 && setLikers(true)} disabled={post.likes === 0}>{post.likes ? <>{reactions.filter((item) => (post.reactionCounts[item.type] || 0) > 0).slice(0, 3).map((item) => <span className="stat-reaction" key={item.type}>{item.emoji}</span>)} {post.likes}</> : 'Wees de eerste'}</button>
       <button onClick={onOpenComments}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
     </div>
     <div className="post-actions">
-      <button className={post.liked ? 'liked' : ''} onClick={onLike}><Heart size={20} fill={post.liked ? 'currentColor' : 'none'} /> Leuk</button>
-      <button onClick={onOpenComments}><MessageCircle size={20} /> Reageer</button>
-      <button onClick={() => setSharing(true)}><Share2 size={20} /> Deel</button>
+      <div className="reaction-action" onMouseEnter={() => setReactionPicker(true)} onMouseLeave={() => setReactionPicker(false)}>{reactionPicker && <div className="reaction-picker" role="menu">{reactions.map((item) => <button type="button" key={item.type} onClick={() => { onReaction(item.type); setReactionPicker(false) }} aria-label={item.label} title={item.label}>{item.emoji}</button>)}</div>}<button className={post.liked ? 'liked' : ''} onClick={() => { if (longPressed.current) { longPressed.current = false; return } onReaction(post.reaction || 'like') }} onPointerDown={(event) => { if (event.pointerType === 'touch') { longPressed.current = false; longPressTimer.current = window.setTimeout(() => { longPressed.current = true; setReactionPicker(true) }, 480) } }} onPointerUp={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current) }} onPointerCancel={() => { if (longPressTimer.current) window.clearTimeout(longPressTimer.current) }} aria-label={activeReaction?.label || 'Leuk vinden'} title={activeReaction?.label || 'Leuk vinden'}>{activeReaction ? <span className="active-reaction">{activeReaction.emoji}</span> : <ThumbsUp />}</button></div>
+      <button onClick={onOpenComments} aria-label="Reageren" title="Reageren"><MessageCircle /></button>
+      <button onClick={() => setSharing(true)} aria-label="Delen" title="Delen"><Forward /></button>
     </div>
     {post.comments.length > 0 && <div className="comments comment-preview">
       {post.comments.map((item) => <div className="comment" key={item.id}>
@@ -82,7 +93,7 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onLike
       </div>)}
       <button className="open-comments" onClick={onOpenComments}>Bekijk en schrijf reacties</button>
     </div>}
-    {sharing && <Modal title="Bericht delen" onClose={() => setSharing(false)}><div className="modal-body share-dialog"><label>Caption<textarea value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={500} placeholder="Zeg iets over dit bericht…" autoFocus /></label><div className="share-options"><button className="primary" onClick={shareOnProfile} disabled={sharingProfile}>{sharingProfile ? <LoaderCircle className="spin" size={18} /> : <UserRound size={18} />} Delen op mijn profiel</button><button className="secondary" onClick={shareExternal}><Share2 size={18} /> Delen via WhatsApp, Messenger…</button></div></div></Modal>}
+    {sharing && <Modal title="Bericht delen" onClose={() => setSharing(false)}><div className="modal-body share-dialog"><label>Caption<textarea value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={500} placeholder="Zeg iets over dit bericht…" autoFocus /></label><div className="share-options"><button className="primary" onClick={shareOnProfile} disabled={sharingProfile}>{sharingProfile ? <LoaderCircle className="spin" size={18} /> : <UserRound size={18} />} Delen op mijn profiel</button><button className="secondary" onClick={shareExternal}><Forward size={18} /> Delen via WhatsApp, Messenger…</button></div></div></Modal>}
     {editing && <Modal title="Bericht bewerken" onClose={() => setEditing(false)}><div className="modal-body edit-post-dialog"><textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={2000} autoFocus aria-label="Berichttekst" /><div className="form-actions"><button className="secondary" onClick={() => setEditing(false)} disabled={busy}>Annuleren</button><button className="primary" onClick={saveEdit} disabled={busy || !editBody.trim() || editBody.trim() === post.body}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Wijzigingen opslaan'}</button></div></div></Modal>}
     {history && <Modal title="Eerdere versies" onClose={() => setHistory(false)}><div className="modal-body revision-list"><div className="revision current"><span>Huidige versie</span><p>{post.body}</p></div>{post.revisions.map((revision, index) => <div className="revision" key={revision.id}><span>Versie {post.revisions.length - index} · {new Date(revision.createdAt).toLocaleString('nl-NL')}</span><p>{revision.body}</p></div>)}</div></Modal>}
     {likers && <Modal title="Likes" onClose={() => setLikers(false)}><div className="modal-body liker-list">{knownLikers.map((profile) => <div className="liker" key={profile.id}><Avatar profile={profile} size={42} /><div><Name profile={profile} /><small>@{profile.username}</small></div></div>)}{unknownLikers > 0 && <p className="more-likers">En {unknownLikers.toLocaleString('nl-NL')} {unknownLikers === 1 ? 'andere persoon' : 'andere mensen'}</p>}</div></Modal>}

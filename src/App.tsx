@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, Bell, Camera, Check, ChevronRight, Compass, Flag, Heart, Home, Image, LoaderCircle,
-  LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
+  ArrowLeft, Ban, BarChart3, Bell, Camera, Check, ChevronDown, ChevronRight, Compass, Flag, Globe2, Heart, Home, Image, LoaderCircle,
+  Lock, LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
   Sparkles, Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
-import type { AppView, Profile } from './types'
+import type { AppView, Poll, Post, Profile } from './types'
 import { useSocialApp } from './lib/useSocialApp'
 import { AuthScreen } from './components/AuthScreen'
 import { PostCard } from './components/PostCard'
@@ -57,11 +57,15 @@ function friendshipLabel(status: FriendshipStatus) {
   return 'Vriend toevoegen'
 }
 
-function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onPost: (body: string, files: File[], visibility: 'public' | 'followers') => Promise<boolean> }) {
+function Compose({ profile, posts, busy, autofocus = false, onProfile, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onProfile: () => void; onPost: (body: string, files: File[], visibility: Post['visibility'], poll?: { question: string; options: string[] }) => Promise<boolean> }) {
   const [body, setBody] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [photoError, setPhotoError] = useState('')
-  const [visibility, setVisibility] = useState<'public' | 'followers'>('public')
+  const [visibility, setVisibility] = useState<Post['visibility']>('public')
+  const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [pollOpen, setPollOpen] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState(['', ''])
   const input = useRef<HTMLInputElement>(null)
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
@@ -75,23 +79,29 @@ function Compose({ profile, posts, busy, autofocus = false, onPost }: { profile:
     if (next.length && available) setFiles((current) => [...current, ...next.slice(0, available)])
     if (input.current) input.current.value = ''
   }
+  const validPollOptions = pollOptions.filter((option) => option.trim())
+  const pollReady = !pollOpen || Boolean(pollQuestion.trim() && validPollOptions.length >= 2)
   const submit = async () => {
-    if (!body.trim() && !files.length) return
-    if (await onPost(body, files, visibility)) { setBody(''); setFiles([]); setPhotoError('') }
+    if ((!body.trim() && !files.length && !pollOpen) || !pollReady) return
+    const poll = pollOpen ? { question: pollQuestion, options: pollOptions } : undefined
+    if (await onPost(body, files, visibility, poll)) { setBody(''); setFiles([]); setPhotoError(''); setPollOpen(false); setPollQuestion(''); setPollOptions(['', '']) }
   }
+  const privacy = visibility === 'public' ? { label: 'Iedereen', icon: Globe2 } : visibility === 'private' ? { label: 'Private', icon: Lock } : { label: 'Alleen vrienden', icon: Users }
   return <section className="card composer">
-    <Avatar profile={profile} size={44} />
+    <button type="button" className="composer-avatar" onClick={onProfile} aria-label="Naar mijn profiel"><Avatar profile={profile} size={44} /></button>
     <div className="composer-main">
       <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder={`Wat wil je delen, ${profile.fullName.split(' ')[0]}?`} />
       <LinkPreview text={body} posts={posts} />
       {photoError && <p className="composer-error" role="alert">{photoError}</p>}
       {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); setPhotoError('') }} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
+      {pollOpen && <div className="poll-composer"><div className="poll-composer-head"><strong>Nieuwe peiling</strong><button type="button" className="icon-button" onClick={() => setPollOpen(false)} aria-label="Peiling verwijderen"><X /></button></div><input value={pollQuestion} onChange={(event) => setPollQuestion(event.target.value)} maxLength={180} placeholder="Stel je vraag" aria-label="Pollvraag" />{pollOptions.map((option, index) => <div className="poll-option-input" key={index}><input value={option} onChange={(event) => setPollOptions((current) => current.map((value, optionIndex) => optionIndex === index ? event.target.value : value))} maxLength={100} placeholder={`Optie ${index + 1}`} aria-label={`Polloptie ${index + 1}`} />{pollOptions.length > 2 && <button type="button" onClick={() => setPollOptions((current) => current.filter((_, optionIndex) => optionIndex !== index))} aria-label={`Optie ${index + 1} verwijderen`}><X /></button>}</div>)}{pollOptions.length < 6 && <button type="button" className="poll-add" onClick={() => setPollOptions((current) => [...current, ''])}><Plus /> Optie toevoegen</button>}{!pollReady && <p className="composer-error">Vul een vraag en minimaal twee opties in.</p>}</div>}
       <div className="composer-tools">
-        <button className="tool-button" onClick={() => input.current?.click()} disabled={files.length >= 10}><Image size={20} /><span>{files.length ? `${files.length}/10 foto's` : "Foto's"}</span></button>
+        <button className="tool-button icon-only" onClick={() => input.current?.click()} disabled={files.length >= 10} aria-label="Foto’s toevoegen" title="Foto’s toevoegen"><Image size={22} />{files.length > 0 && <b>{files.length}</b>}</button>
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden onChange={(event) => choose(event.target.files)} />
-        <select value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)} aria-label="Zichtbaarheid"><option value="public">Iedereen</option><option value="followers">Volgers</option></select>
+        <button type="button" className={`tool-button icon-only ${pollOpen ? 'active' : ''}`} onClick={() => setPollOpen(!pollOpen)} aria-label="Peiling toevoegen" title="Peiling toevoegen"><BarChart3 size={22} /></button>
+        <div className="privacy-picker"><button type="button" className="tool-button privacy-button" onClick={() => setPrivacyOpen(!privacyOpen)} aria-label={`Privacy: ${privacy.label}`} title={`Privacy: ${privacy.label}`}><privacy.icon size={21} /><ChevronDown size={14} /></button>{privacyOpen && <div className="privacy-menu">{([{ value: 'public', label: 'Iedereen', icon: Globe2 }, { value: 'private', label: 'Private', icon: Lock }, { value: 'friends', label: 'Alleen vrienden', icon: Users }] as const).map((item) => <button type="button" key={item.value} className={visibility === item.value ? 'active' : ''} onClick={() => { setVisibility(item.value); setPrivacyOpen(false) }}><item.icon /><span>{item.label}</span>{visibility === item.value && <Check />}</button>)}</div>}</div>
         <span className="char-count">{body.length}/2000</span>
-        <button className="primary compact" disabled={busy || (!body.trim() && !files.length)} onClick={submit}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Plaatsen'}</button>
+        <button className="primary compact" disabled={busy || (!body.trim() && !files.length && !pollOpen) || !pollReady} onClick={submit}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Plaatsen'}</button>
       </div>
     </div>
   </section>
@@ -131,35 +141,35 @@ function Notifications({ notices, following, onFriendAction, onRead }: { notices
   </section>
 }
 
-function ProfilePage({ profile, currentId, posts, following, followers, onFriendAction, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; followers: string[]; onFriendAction: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
+function ProfilePage({ profile, currentId, posts, following, followers, onFriendAction, onBlock, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; followers: string[]; onFriendAction: (id: string) => void; onBlock: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
   const mine = posts.filter((post) => post.author.id === profile.id)
   const isMine = profile.id === currentId
   const friendState = friendshipStatus(profile.id, following, followers)
   const [viewingImage, setViewingImage] = useState<{ src: string; alt: string } | null>(null)
   return <div className="page-stack"><section className="card profile-card">
     <button type="button" className={`cover ${profile.coverUrl ? 'has-image' : ''}`} style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined} onClick={() => profile.coverUrl && setViewingImage({ src: profile.coverUrl, alt: `Omslagfoto van ${profile.fullName}` })} disabled={!profile.coverUrl} aria-label={profile.coverUrl ? 'Omslagfoto openen en inzoomen' : 'Geen omslagfoto'}><div className="cover-pattern" /></button>
-    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <button className={friendState === 'none' || friendState === 'incoming' ? 'primary edit-profile' : 'secondary edit-profile'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
+    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <div className="profile-actions"><button className={friendState === 'none' || friendState === 'incoming' ? 'primary' : 'secondary'} onClick={() => friendState !== 'friends' && onFriendAction(profile.id)} disabled={friendState === 'friends'}>{friendshipLabel(friendState)}</button><button className="secondary block-profile" onClick={() => onBlock(profile.id)} aria-label={`${profile.fullName} blokkeren`}><Ban /></button></div>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> connecties</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> verzoeken</span><span><strong>{mine.length}</strong> berichten</span></div></div>
     {isMine && <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>}
   </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}>{textWithoutPreviewUrl(post.body) && <p><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></p>}<LinkPreview text={post.body} posts={posts} currentPostId={post.id} /><PostImages urls={post.imageUrls} authorName={profile.fullName} className="profile-post-images" /><small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
     {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} onClose={() => setViewingImage(null)} />}
   </div>
 }
 
-function CommentPage({ post, allPosts, profile, busy, onBack, onComment }: { post: ReturnType<typeof useSocialApp>['posts'][number] | undefined; allPosts: ReturnType<typeof useSocialApp>['posts']; profile: Profile; busy: boolean; onBack: () => void; onComment: (body: string) => Promise<void> }) {
+function CommentPage({ post, profile, busy, onBack, onComment, onToggleLike }: { post: ReturnType<typeof useSocialApp>['posts'][number] | undefined; profile: Profile; busy: boolean; onBack: () => void; onComment: (body: string, parentId?: string) => Promise<void>; onToggleLike: (commentId: string) => void }) {
   const [body, setBody] = useState('')
+  const [replyingTo, setReplyingTo] = useState<Post['comments'][number] | null>(null)
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!body.trim() || busy) return
-    await onComment(body)
-    setBody('')
+    await onComment(body, replyingTo?.id)
+    setBody(''); setReplyingTo(null)
   }
   if (!post) return <section className="card page-card"><button className="thread-back" onClick={onBack}><ArrowLeft /> Terug</button><EmptyState icon={<MessageCircle />} title="Bericht niet gevonden" text="Dit bericht bestaat niet of is verwijderd." /></section>
   return <div className="page-stack thread-page">
     <section className="card thread-card">
-      <header className="thread-title"><button className="icon-button" onClick={onBack} aria-label="Terug"><ArrowLeft /></button><div><h1>Reacties</h1><p>Praat mee met de community</p></div></header>
-      <article className="thread-original"><div className="thread-author"><Avatar profile={post.author} size={46} /><div><Name profile={post.author} /><small>@{post.author.username} · {timeAgo(post.createdAt)}</small></div></div>{textWithoutPreviewUrl(post.body) && <p><LinkifiedText text={textWithoutPreviewUrl(post.body)} /></p>}<LinkPreview text={post.body} posts={allPosts} currentPostId={post.id} /><PostImages urls={post.imageUrls} authorName={post.author.fullName} className="thread-images" /></article>
-      <form className="thread-compose" onSubmit={submit}><Avatar profile={profile} size={40} /><div><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} placeholder={`Schrijf je reactie, ${profile.fullName.split(' ')[0]}…`} aria-label="Reactie schrijven" /><div><span>{body.length}/1000</span><button className="primary compact" disabled={!body.trim() || busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <><Send size={17} /> Reageren</>}</button></div></div></form>
-      <div className="thread-comments"><h2>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</h2>{post.comments.length ? post.comments.map((comment) => <article className="thread-comment" key={comment.id}><Avatar profile={comment.author} size={38} /><div><Name profile={comment.author} /><p>{comment.body}</p><small>{timeAgo(comment.createdAt)}</small></div></article>) : <EmptyState icon={<MessageCircle />} title="Nog geen reacties" text="Schrijf de eerste reactie op dit bericht." />}</div>
+      <header className="thread-title"><button className="icon-button" onClick={onBack} aria-label="Terug"><ArrowLeft /></button><div><h1>Reacties</h1><p>Op bericht van {post.author.fullName}</p></div></header>
+      <form className="thread-compose" onSubmit={submit}><Avatar profile={profile} size={40} /><div>{replyingTo && <div className="replying-to"><span>Antwoord aan {replyingTo.author.fullName}</span><button type="button" onClick={() => setReplyingTo(null)} aria-label="Antwoord annuleren"><X /></button></div>}<textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} maxLength={1000} placeholder={replyingTo ? `Antwoord aan ${replyingTo.author.fullName}…` : `Schrijf je reactie, ${profile.fullName.split(' ')[0]}…`} aria-label="Reactie schrijven" /><div><span>{body.length}/1000</span><button className="send-comment" disabled={!body.trim() || busy} aria-label="Reactie verzenden">{busy ? <LoaderCircle className="spin" size={18} /> : <Send size={20} />}</button></div></div></form>
+      <div className="thread-comments"><h2>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</h2>{post.comments.length ? post.comments.map((comment) => <article className={`thread-comment ${comment.parentId ? 'reply' : ''}`} key={comment.id}><Avatar profile={comment.author} size={38} /><div><Name profile={comment.author} /><p>{comment.body}</p><div className="comment-meta"><span>{timeAgo(comment.createdAt)}</span><button className={comment.liked ? 'liked' : ''} onClick={() => onToggleLike(comment.id)}><Heart fill={comment.liked ? 'currentColor' : 'none'} /> {comment.likes || ''}</button><button onClick={() => { setReplyingTo(comment); setBody(`@${comment.author.username} `) }}>Beantwoorden</button></div></div></article>) : <EmptyState icon={<MessageCircle />} title="Nog geen reacties" text="Schrijf de eerste reactie op dit bericht." />}</div>
     </section>
   </div>
 }
@@ -218,7 +228,7 @@ export default function App() {
       setView(next); setProfileUsername(next === 'profile' ? profile.username : ''); setMobileMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' })
     } else window.location.hash = hash
   }
-  const post = async (body: string, files: File[], visibility: 'public' | 'followers') => { const ok = await store.createPost(body, files, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
+  const post = async (body: string, files: File[], visibility: Post['visibility'], poll?: { question: string; options: string[] }) => { const ok = await store.createPost(body, files, visibility, poll); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
   const friendAction = async (id: string) => {
     const status = friendshipStatus(id, store.following, store.followers)
     if (status === 'friends') return
@@ -231,9 +241,13 @@ export default function App() {
     const sharedBody = [caption.trim(), url.toString()].filter(Boolean).join('\n\n')
     return store.createPost(sharedBody, [], 'public')
   }
+  const blockProfile = async (id: string, name: string) => {
+    if (!window.confirm(`Wil je ${name} blokkeren? Jullie zien elkaars berichten en profielen daarna niet meer.`)) return
+    if (await store.blockUser(id)) { setToast(`${name} is geblokkeerd`); go('feed') }
+  }
 
   return <div className="app-shell">
-    <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
+    <header className="topbar"><div className="topbar-inner"><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Menu openen"><Menu /></button></div></div></header>
     <div className="layout">
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}><div className="mobile-sidebar-head"><span>Menu</span><button className="icon-button" onClick={() => setMobileMenu(false)}><X /></button></div>
         <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}<button className="mobile-theme-toggle" onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />}<span>{dark ? 'Lichte modus' : 'Donkere modus'}</span></button></nav>
@@ -241,18 +255,18 @@ export default function App() {
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
       <main className="content">
-        {view === 'feed' && <div className="page-stack"><div className="feed-intro"><div><h1>Goedemorgen, {profile.fullName.split(' ')[0]} 👋</h1><p>Dit speelt er vandaag in je community.</p></div></div><Compose profile={profile} posts={store.posts} busy={store.busy} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onLike={() => store.toggleLike(item.id)} onEdit={(body) => store.updatePost(item.id, body)} onDelete={() => store.deletePost(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => store.blockUser(item.author.id)} onToast={setToast} />)}</div>}
-        {view === 'compose' && <div className="page-stack"><div className="simple-title"><h1>Nieuw bericht</h1><p>Deel iets met je community</p></div><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onPost={post} /></div>}
+        {view === 'feed' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} onProfile={() => go('profile')} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(item.id, reaction)} onVote={(optionId) => store.votePoll(item.id, optionId)} onEdit={(body) => store.updatePost(item.id, body)} onDelete={() => store.deletePost(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => blockProfile(item.author.id, item.author.fullName)} onToast={setToast} />)}</div>}
+        {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onProfile={() => go('profile')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onRead={store.markNoticesRead} />}
-        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
-        {view === 'comments' && <CommentPage post={activePost} allPosts={store.posts} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body) => { if (activePostId) { await store.addComment(activePostId, body); setToast('Reactie geplaatst') } }} />}
+        {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
       </main>
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
-    <nav className="bottom-nav">{nav.map((item) => <button key={item.view} className={`${view === item.view ? 'active' : ''} ${item.compose ? 'compose-nav' : ''}`} onClick={() => go(item.view)}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</span><small>{item.label}</small></button>)}</nav>
+    <nav className="bottom-nav">{nav.map((item) => <button key={item.view} className={`${view === item.view ? 'active' : ''} ${item.compose ? 'compose-nav' : ''}`} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</span></button>)}</nav>
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
