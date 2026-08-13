@@ -14,7 +14,7 @@ export function Avatar({ profile, size = 44 }: { profile: Profile; size?: number
 }
 
 export function Name({ profile }: { profile: Profile }) {
-  return <span className="person-name">{profile.fullName}{profile.verified && <CheckCircle2 className="verified" size={15} fill="currentColor" />}</span>
+  return <a className="person-name" href={`#/profile/${encodeURIComponent(profile.username)}`}>{profile.fullName}{profile.verified && <CheckCircle2 className="verified" size={15} fill="currentColor" />}</a>
 }
 
 export function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {

@@ -7,6 +7,7 @@ import { hasSupabase, supabase } from './supabase'
 const STORAGE_KEY = 'boekoe-demo-v1'
 
 type DemoState = { posts: Post[]; following: string[]; notices: Notice[]; reports: Report[]; profile: Profile }
+type ProfileMedia = { avatar?: File | null; cover?: File | null }
 
 function readDemo(): DemoState {
   try {
@@ -28,6 +29,13 @@ const rowPost = (row: any, userId: string): Post => ({
   createdAt: row.created_at, visibility: row.visibility || 'public', likes: row.likes?.length || 0,
   liked: Boolean(row.likes?.some((like: any) => like.user_id === userId)),
   comments: (row.comments || []).map((comment: any) => ({ id: comment.id, author: rowProfile(comment.author), body: comment.body, createdAt: comment.created_at })),
+})
+
+const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result))
+  reader.onerror = () => reject(reader.error)
+  reader.readAsDataURL(file)
 })
 
 export function useSocialApp() {
@@ -181,10 +189,60 @@ export function useSocialApp() {
     if (supabase && session) await supabase.from('blocks').insert({ blocker_id: session.user.id, blocked_id: userId })
   }
 
-  const updateProfile = async (changes: Partial<Profile>) => {
-    if (!profile) return
-    const next = { ...profile, ...changes }; setProfile(next); persist({ profile: next })
-    if (supabase && session) await supabase.from('profiles').update({ full_name: next.fullName, username: next.username, bio: next.bio, location: next.location }).eq('id', session.user.id)
+  const updateProfile = async (changes: Partial<Profile>, media: ProfileMedia = {}) => {
+    if (!profile) return false
+    setBusy(true); setError('')
+    try {
+      let avatarUrl = profile.avatarUrl
+      let coverUrl = profile.coverUrl || ''
+      if (supabase && session) {
+        const client = supabase
+        const upload = async (file: File, kind: 'avatar' | 'cover') => {
+          const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' } as Record<string, string>)[file.type] || 'jpg'
+          const path = `${session.user.id}/profile/${kind}-${crypto.randomUUID()}.${extension}`
+          const result = await client.storage.from('post-media').upload(path, file, { contentType: file.type })
+          if (result.error) throw result.error
+          return client.storage.from('post-media').getPublicUrl(path).data.publicUrl
+        }
+        if (media.avatar) avatarUrl = await upload(media.avatar, 'avatar')
+        if (media.cover) coverUrl = await upload(media.cover, 'cover')
+      } else {
+        if (media.avatar) avatarUrl = await fileToDataUrl(media.avatar)
+        if (media.cover) coverUrl = await fileToDataUrl(media.cover)
+      }
+
+      const next = { ...profile, ...changes, avatarUrl, coverUrl }
+      if (supabase && session) {
+        const result = await supabase.from('profiles').update({
+          full_name: next.fullName,
+          username: next.username,
+          bio: next.bio,
+          location: next.location,
+          avatar_url: next.avatarUrl,
+          cover_url: next.coverUrl || '',
+        }).eq('id', session.user.id)
+        if (result.error) throw result.error
+      }
+
+      const replace = (person: Profile) => person.id === next.id ? next : person
+      const nextPosts = posts.map((post) => ({
+        ...post,
+        author: replace(post.author),
+        comments: post.comments.map((comment) => ({ ...comment, author: replace(comment.author) })),
+      }))
+      const nextNotices = notices.map((notice) => ({ ...notice, actor: notice.actor ? replace(notice.actor) : undefined }))
+      setProfile(next)
+      setProfiles((current) => current.some((person) => person.id === next.id) ? current.map(replace) : [next, ...current])
+      setPosts(nextPosts)
+      setNotices(nextNotices)
+      persist({ profile: next, posts: nextPosts, notices: nextNotices })
+      setBusy(false)
+      return true
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Profiel bijwerken mislukt')
+      setBusy(false)
+      return false
+    }
   }
 
   const markNoticesRead = async () => {

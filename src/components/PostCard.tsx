@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Ban, Ellipsis, Flag, Heart, MessageCircle, Send, Share2, Users } from 'lucide-react'
 import type { Post } from '../types'
 import { Avatar, Modal, Name } from './ui'
+import { ImageViewer } from './ImageViewer'
 
 function ago(value: string) {
   const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
@@ -19,14 +20,18 @@ export function PostCard({ post, currentUserId, onLike, onComment, onReport, onB
   const [comment, setComment] = useState('')
   const [menu, setMenu] = useState(false)
   const [reporting, setReporting] = useState(false)
+  const [viewingImage, setViewingImage] = useState(false)
   const submit = () => { if (!comment.trim()) return; onComment(comment); setComment(''); setCommenting(true) }
   const share = async () => {
-    const data = { title: `Bericht van ${post.author.fullName}`, text: post.body, url: location.href }
+    const url = new URL(import.meta.env.BASE_URL, window.location.origin)
+    url.hash = `/post/${encodeURIComponent(post.id)}`
+    const absoluteUrl = url.toString()
+    const data = { title: `Bericht van ${post.author.fullName}`, text: post.body, url: absoluteUrl }
     if (navigator.share) await navigator.share(data).catch(() => undefined)
-    else { await navigator.clipboard?.writeText(`${post.body}\n${location.href}`); onToast('Link gekopieerd') }
+    else { await navigator.clipboard?.writeText(`${post.body}\n${absoluteUrl}`); onToast('Link gekopieerd') }
   }
 
-  return <article className="card post-card">
+  return <article className="card post-card" id={`post-${post.id}`}>
     <header className="post-header">
       <Avatar profile={post.author} size={46} />
       <div className="post-by"><Name profile={post.author} /><span>@{post.author.username} · {ago(post.createdAt)} {post.visibility === 'followers' && <Users size={12} />}</span></div>
@@ -39,7 +44,7 @@ export function PostCard({ post, currentUserId, onLike, onComment, onReport, onB
       </div>
     </header>
     {post.body && <p className="post-body">{post.body}</p>}
-    {post.imageUrl && <img className="post-image" src={post.imageUrl} alt="Afbeelding bij bericht" loading="lazy" />}
+    {post.imageUrl && <button type="button" className="post-image-button" onClick={() => setViewingImage(true)} aria-label="Afbeelding openen en inzoomen"><img className="post-image" src={post.imageUrl} alt="Afbeelding bij bericht" loading="lazy" /></button>}
     <div className="post-stats">
       <span>{post.likes ? `${post.likes} ${post.likes === 1 ? 'like' : 'likes'}` : 'Wees de eerste'}</span>
       <button onClick={() => setCommenting(true)}>{post.comments.length} {post.comments.length === 1 ? 'reactie' : 'reacties'}</button>
@@ -64,5 +69,6 @@ export function PostCard({ post, currentUserId, onLike, onComment, onReport, onB
         <div className="reason-list">{['Spam of ongewenste reclame', 'Haatdragend of intimiderend', 'Misleidende informatie', 'Naakt of gewelddadig beeld', 'Iets anders'].map((reason) => <button key={reason} onClick={() => { onReport(reason); setReporting(false); onToast('Melding ontvangen. Bedankt.') }}>{reason}<span>›</span></button>)}</div>
       </div>
     </Modal>}
+    {viewingImage && post.imageUrl && <ImageViewer src={post.imageUrl} alt={`Afbeelding bij bericht van ${post.author.fullName}`} onClose={() => setViewingImage(false)} />}
   </article>
 }

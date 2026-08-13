@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bell, Check, ChevronRight, Compass, Flag, Heart, Home, Image, LoaderCircle, LogOut,
+  Bell, Camera, Check, ChevronRight, Compass, Flag, Heart, Home, Image, LoaderCircle, LogOut,
   Menu, MessageCircle, Moon, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles,
   Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -9,6 +9,7 @@ import { useSocialApp } from './lib/useSocialApp'
 import { AuthScreen } from './components/AuthScreen'
 import { PostCard } from './components/PostCard'
 import { Avatar, BrandMark, EmptyState, Modal, Name, Toast } from './components/ui'
+import { ImageViewer } from './components/ImageViewer'
 
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
@@ -24,6 +25,15 @@ function timeAgo(value: string) {
   if (minutes < 60) return `${minutes} min.`
   if (minutes < 1440) return `${Math.floor(minutes / 60)} u.`
   return `${Math.floor(minutes / 1440)} d.`
+}
+
+function readHashRoute() {
+  let parts: string[] = []
+  try { parts = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map((part) => decodeURIComponent(part)) } catch { return { view: 'feed' as AppView } }
+  if (parts[0] === 'profile' && parts[1]) return { view: 'profile' as AppView, username: parts[1] }
+  if (parts[0] === 'post' && parts[1]) return { view: 'feed' as AppView, postId: parts[1] }
+  if (['feed', 'discover', 'compose', 'notifications', 'profile', 'moderation'].includes(parts[0])) return { view: parts[0] as AppView }
+  return { view: 'feed' as AppView }
 }
 
 function Compose({ profile, busy, autofocus = false, onPost }: { profile: Profile; busy: boolean; autofocus?: boolean; onPost: (body: string, file: File | null, visibility: 'public' | 'followers') => Promise<boolean> }) {
@@ -92,12 +102,17 @@ function Notifications({ notices, onRead }: { notices: ReturnType<typeof useSoci
   </section>
 }
 
-function ProfilePage({ profile, posts, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
+function ProfilePage({ profile, currentId, posts, following, onFollow, onEdit, onModerate, onLogout, online, onReset }: { profile: Profile; currentId: string; posts: ReturnType<typeof useSocialApp>['posts']; following: string[]; onFollow: (id: string) => void; onEdit: () => void; onModerate: () => void; onLogout: () => void; online: boolean; onReset: () => void }) {
   const mine = posts.filter((post) => post.author.id === profile.id)
+  const isMine = profile.id === currentId
+  const [viewingImage, setViewingImage] = useState<{ src: string; alt: string } | null>(null)
   return <div className="page-stack"><section className="card profile-card">
-    <div className="cover"><div className="cover-pattern" /></div><div className="profile-content"><Avatar profile={profile} size={94} /><button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button><h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> volgers</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> volgend</span><span><strong>{mine.length}</strong> berichten</span></div></div>
-    <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>
-  </section><section className="card section-card"><h2>Mijn berichten</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}><p>{post.body}</p>{post.imageUrl && <img src={post.imageUrl} alt="" />}<small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text="Deel je eerste bericht met de community." />}</section></div>
+    <button type="button" className={`cover ${profile.coverUrl ? 'has-image' : ''}`} style={profile.coverUrl ? { backgroundImage: `url(${profile.coverUrl})` } : undefined} onClick={() => profile.coverUrl && setViewingImage({ src: profile.coverUrl, alt: `Omslagfoto van ${profile.fullName}` })} disabled={!profile.coverUrl} aria-label={profile.coverUrl ? 'Omslagfoto openen en inzoomen' : 'Geen omslagfoto'}><div className="cover-pattern" /></button>
+    <div className="profile-content"><button type="button" className="profile-avatar-view" onClick={() => profile.avatarUrl && setViewingImage({ src: profile.avatarUrl, alt: `Profielfoto van ${profile.fullName}` })} disabled={!profile.avatarUrl} aria-label={profile.avatarUrl ? 'Profielfoto openen en inzoomen' : 'Geen profielfoto'}><Avatar profile={profile} size={94} /></button>{isMine ? <button className="secondary edit-profile" onClick={onEdit}>Profiel bewerken</button> : <button className={following.includes(profile.id) ? 'secondary edit-profile' : 'primary edit-profile'} onClick={() => onFollow(profile.id)}>{following.includes(profile.id) ? 'Volgend' : 'Volgen'}</button>}<h1><Name profile={profile} /></h1><span className="handle">@{profile.username}</span><p>{profile.bio}</p><span className="location">{profile.location}</span><div className="profile-stats"><span><strong>{profile.followers.toLocaleString('nl-NL')}</strong> volgers</span><span><strong>{profile.following.toLocaleString('nl-NL')}</strong> volgend</span><span><strong>{mine.length}</strong> berichten</span></div></div>
+    {isMine && <div className="profile-menu">{profile.isAdmin && <button onClick={onModerate}><ShieldCheck /> Moderatie <ChevronRight /></button>}<button><Settings /> Instellingen <ChevronRight /></button>{!online && <button onClick={onReset}><MoreHorizontal /> Demo herstellen <ChevronRight /></button>}{online && <button className="danger-text" onClick={onLogout}><LogOut /> Uitloggen <ChevronRight /></button>}</div>}
+  </section><section className="card section-card"><h2>{isMine ? 'Mijn berichten' : <>Berichten van <Name profile={profile} /></>}</h2>{mine.length ? mine.map((post) => <div className="profile-post" key={post.id}><p>{post.body}</p>{post.imageUrl && <button type="button" onClick={() => setViewingImage({ src: post.imageUrl!, alt: `Afbeelding bij bericht van ${profile.fullName}` })} aria-label="Afbeelding openen en inzoomen"><img src={post.imageUrl} alt="" /></button>}<small>{post.likes} likes · {post.comments.length} reacties · {timeAgo(post.createdAt)}</small></div>) : <EmptyState icon={<MessageCircle />} title="Nog geen berichten" text={isMine ? 'Deel je eerste bericht met de community.' : 'Dit profiel heeft nog niets gedeeld.'} />}</section>
+    {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} onClose={() => setViewingImage(null)} />}
+  </div>
 }
 
 function Moderation({ reports, onUpdate }: { reports: ReturnType<typeof useSocialApp>['reports']; onUpdate: (id: string, status: 'open' | 'reviewed' | 'removed') => void }) {
@@ -109,7 +124,9 @@ function Moderation({ reports, onUpdate }: { reports: ReturnType<typeof useSocia
 
 export default function App() {
   const store = useSocialApp()
-  const [view, setView] = useState<AppView>('feed')
+  const initialRoute = useMemo(readHashRoute, [])
+  const [view, setView] = useState<AppView>(initialRoute.view)
+  const [profileUsername, setProfileUsername] = useState(initialRoute.username || '')
   const [dark, setDark] = useState(() => localStorage.getItem('boekoe-theme') === 'dark')
   const [toast, setToast] = useState('')
   const [editing, setEditing] = useState(false)
@@ -117,19 +134,46 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('boekoe-theme', dark ? 'dark' : 'light') }, [dark])
   const unread = store.notices.filter((notice) => !notice.read).length
   const feed = useMemo(() => [...store.posts].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)), [store.posts])
+  const allProfiles = useMemo(() => store.profile && !store.profiles.some((person) => person.id === store.profile?.id) ? [store.profile, ...store.profiles] : store.profiles, [store.profile, store.profiles])
+  const viewedProfile = profileUsername ? allProfiles.find((person) => person.username.toLowerCase() === profileUsername.toLowerCase()) : store.profile
+
+  useEffect(() => {
+    const applyHash = () => {
+      const route = readHashRoute()
+      setView(route.view)
+      setProfileUsername(route.username || '')
+      setMobileMenu(false)
+      if (!route.postId) window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    window.addEventListener('hashchange', applyHash)
+    if (window.location.hash) applyHash()
+    return () => window.removeEventListener('hashchange', applyHash)
+  }, [])
+
+  useEffect(() => {
+    const route = readHashRoute()
+    if (!route.postId || view !== 'feed') return
+    const timer = window.setTimeout(() => document.getElementById(`post-${route.postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+    return () => window.clearTimeout(timer)
+  }, [feed, view])
 
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
-  const go = (next: AppView) => { setView(next); setMobileMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const go = (next: AppView) => {
+    const hash = next === 'profile' ? `/profile/${encodeURIComponent(profile.username)}` : `/${next}`
+    if (window.location.hash === `#${hash}`) {
+      setView(next); setProfileUsername(next === 'profile' ? profile.username : ''); setMobileMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else window.location.hash = hash
+  }
   const post = async (body: string, file: File | null, visibility: 'public' | 'followers') => { const ok = await store.createPost(body, file, visibility); if (ok) { setToast('Je bericht staat online'); go('feed') } return ok }
 
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(!mobileMenu)}><Menu /></button><button className="wordmark" onClick={() => go('feed')}><BrandMark /><strong>Boekoe</strong></button><div className="top-search" onClick={() => go('discover')}><Search /><span>Zoeken op Boekoe</span></div><div className="top-actions"><span className={store.online ? 'mode live' : 'mode'}>{store.online ? 'Live' : 'Demo'}</span><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Thema wijzigen">{dark ? <Sun /> : <Moon />}</button><button className="avatar-button" onClick={() => go('profile')}><Avatar profile={profile} size={38} /></button></div></div></header>
     <div className="layout">
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}><div className="mobile-sidebar-head"><span>Menu</span><button className="icon-button" onClick={() => setMobileMenu(false)}><X /></button></div>
-        <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}</nav>
+        <nav>{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)}><item.icon /><span>{item.label}</span>{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</button>)}{profile.isAdmin && <button className={view === 'moderation' ? 'active' : ''} onClick={() => go('moderation')}><ShieldCheck /><span>Moderatie</span></button>}<button className="mobile-theme-toggle" onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />}<span>{dark ? 'Lichte modus' : 'Donkere modus'}</span></button></nav>
         <button className="primary sidebar-post" onClick={() => go('compose')}><Plus /> Nieuw bericht</button><div className="sidebar-user"><Avatar profile={profile} size={42} /><div><Name profile={profile} /><small>@{profile.username}</small></div></div>
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
@@ -138,18 +182,54 @@ export default function App() {
         {view === 'compose' && <div className="page-stack"><div className="simple-title"><h1>Nieuw bericht</h1><p>Deel iets met je community</p></div><Compose profile={profile} busy={store.busy} autofocus onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} onFollow={store.toggleFollow} />}
         {view === 'notifications' && <Notifications notices={store.notices} onRead={store.markNoticesRead} />}
-        {view === 'profile' && <ProfilePage profile={profile} posts={store.posts} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} onFollow={store.toggleFollow} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
       </main>
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} onFollow={store.toggleFollow} />
     </div>
     <nav className="bottom-nav">{nav.map((item) => <button key={item.view} className={`${view === item.view ? 'active' : ''} ${item.compose ? 'compose-nav' : ''}`} onClick={() => go(item.view)}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}</span><small>{item.label}</small></button>)}</nav>
-    {editing && <EditProfile profile={profile} onClose={() => setEditing(false)} onSave={(changes) => { store.updateProfile(changes); setEditing(false); setToast('Profiel bijgewerkt') }} />}
+    {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
 }
 
-function EditProfile({ profile, onClose, onSave }: { profile: Profile; onClose: () => void; onSave: (changes: Partial<Profile>) => void }) {
-  const submit = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); onSave({ fullName: String(data.get('fullName')), username: String(data.get('username')), bio: String(data.get('bio')), location: String(data.get('location')) }) }
-  return <Modal title="Profiel bewerken" onClose={onClose}><form className="modal-body edit-form" onSubmit={submit}><label>Naam<input name="fullName" defaultValue={profile.fullName} required /></label><label>Gebruikersnaam<input name="username" defaultValue={profile.username} pattern="[a-zA-Z0-9_.]+" required /></label><label>Bio<textarea name="bio" defaultValue={profile.bio} maxLength={160} /></label><label>Woonplaats<input name="location" defaultValue={profile.location} /></label><div className="form-actions"><button type="button" className="secondary" onClick={onClose}>Annuleren</button><button className="primary">Opslaan</button></div></form></Modal>
+function EditProfile({ profile, busy, error, onClose, onSave }: { profile: Profile; busy: boolean; error: string; onClose: () => void; onSave: (changes: Partial<Profile>, media: { avatar: File | null; cover: File | null }) => Promise<boolean> }) {
+  const [avatar, setAvatar] = useState<File | null>(null)
+  const [cover, setCover] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState(profile.avatarUrl)
+  const [coverPreview, setCoverPreview] = useState(profile.coverUrl || '')
+  const [localError, setLocalError] = useState('')
+  const avatarInput = useRef<HTMLInputElement>(null)
+  const coverInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => () => { if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview) }, [avatarPreview])
+  useEffect(() => () => { if (coverPreview.startsWith('blob:')) URL.revokeObjectURL(coverPreview) }, [coverPreview])
+
+  const choose = (file: File | undefined, kind: 'avatar' | 'cover') => {
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { setLocalError('Kies een JPG-, PNG-, WebP- of GIF-afbeelding.'); return }
+    if (file.size > 8 * 1024 * 1024) { setLocalError('De afbeelding mag maximaal 8 MB zijn.'); return }
+    setLocalError('')
+    const preview = URL.createObjectURL(file)
+    if (kind === 'avatar') { setAvatar(file); setAvatarPreview(preview) }
+    else { setCover(file); setCoverPreview(preview) }
+  }
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    await onSave({ fullName: String(data.get('fullName')), username: String(data.get('username')), bio: String(data.get('bio')), location: String(data.get('location')) }, { avatar, cover })
+  }
+
+  return <Modal title="Profiel bewerken" onClose={onClose}><form className="modal-body edit-form" onSubmit={submit}>
+    <div className="profile-media-editor">
+      <button type="button" className={`cover-picker ${coverPreview ? 'has-image' : ''}`} style={coverPreview ? { backgroundImage: `url(${coverPreview})` } : undefined} onClick={() => coverInput.current?.click()}><span><Camera /> Achtergrond wijzigen</span></button>
+      <button type="button" className="avatar-picker" onClick={() => avatarInput.current?.click()} aria-label="Profielfoto wijzigen"><Avatar profile={{ ...profile, avatarUrl: avatarPreview }} size={88} /><span><Camera /></span></button>
+      <input ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => choose(event.target.files?.[0], 'cover')} />
+      <input ref={avatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => choose(event.target.files?.[0], 'avatar')} />
+      <p>Tik op de afbeeldingen om ze te wijzigen · maximaal 8 MB</p>
+    </div>
+    {(localError || error) && <p className="form-error">{localError || error}</p>}
+    <label>Naam<input name="fullName" defaultValue={profile.fullName} required /></label><label>Gebruikersnaam<input name="username" defaultValue={profile.username} pattern="[a-zA-Z0-9_.]+" minLength={3} maxLength={30} required /></label><label>Bio<textarea name="bio" defaultValue={profile.bio} maxLength={160} /></label><label>Woonplaats<input name="location" defaultValue={profile.location} maxLength={80} /></label><div className="form-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Annuleren</button><button className="primary" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={18} /> Opslaan…</> : 'Opslaan'}</button></div>
+  </form></Modal>
 }
