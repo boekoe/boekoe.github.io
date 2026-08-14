@@ -16,6 +16,8 @@ export function PostImages({ urls, authorName, className = '' }: { urls: string[
       src={urls[active]}
       alt={`Afbeelding ${active + 1} bij bericht van ${authorName}`}
       onClose={() => setActive(null)}
+      previousSrc={urls.length > 1 ? urls[(active - 1 + urls.length) % urls.length] : undefined}
+      nextSrc={urls.length > 1 ? urls[(active + 1) % urls.length] : undefined}
       onPrevious={urls.length > 1 ? () => setActive((active - 1 + urls.length) % urls.length) : undefined}
       onNext={urls.length > 1 ? () => setActive((active + 1) % urls.length) : undefined}
       position={urls.length > 1 ? `${active + 1} / ${urls.length}` : undefined}

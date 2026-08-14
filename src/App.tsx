@@ -14,6 +14,8 @@ import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './components/
 import { PostImages } from './components/PostImages'
 import { Messages } from './components/Messages'
 
+const MOBILE_VIEW_QUERY = '(max-width: 780px), (max-height: 520px) and (pointer: coarse)'
+
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
   { view: 'discover' as AppView, label: 'Ontdek', icon: Compass },
@@ -73,7 +75,7 @@ function Compose({ profile, posts, busy, autofocus = false, fullscreen = false, 
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
   useEffect(() => {
-    if (!fullscreen || !window.matchMedia('(max-width: 780px)').matches) return
+    if (!fullscreen || !window.matchMedia(MOBILE_VIEW_QUERY).matches) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = previousOverflow }
@@ -97,7 +99,7 @@ function Compose({ profile, posts, busy, autofocus = false, fullscreen = false, 
   }
   const privacy = visibility === 'public' ? { label: 'Iedereen', icon: Globe2 } : visibility === 'private' ? { label: 'Private', icon: Lock } : { label: 'Alleen vrienden', icon: Users }
   const expandOnMobile = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    if (!onExpand || !window.matchMedia('(max-width: 780px)').matches) return
+    if (!onExpand || !window.matchMedia(MOBILE_VIEW_QUERY).matches) return
     event.preventDefault()
     event.currentTarget.blur()
     onExpand()
