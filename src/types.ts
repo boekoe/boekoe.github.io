@@ -51,6 +51,7 @@ export type Post = {
   likedBy: string[]
   reaction?: ReactionType
   reactionCounts: Partial<Record<ReactionType, number>>
+  reactionsByUser?: Partial<Record<string, ReactionType>>
   poll?: Poll
   revisions: PostRevision[]
   comments: Comment[]

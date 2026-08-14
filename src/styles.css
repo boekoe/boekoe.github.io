@@ -355,8 +355,15 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .liker-list { display: grid; gap: 6px; }
 .liker { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 12px; }
 .liker:hover { background: var(--surface-2); }
-.liker > div { min-width: 0; display: grid; }
+.liker-person { min-width: 0; flex: 1; display: grid; }
 .liker small { color: var(--muted); }
+.liker-reaction { min-width: 92px; height: 31px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 16px; color: #fff; background: var(--green); font-size: 11px; font-weight: 800; }
+.liker-reaction svg { width: 15px; height: 15px; }
+.liker-reaction.love { background: #d3374f; }
+.liker-reaction.laugh { background: #d68b18; }
+.liker-reaction.wow { background: #8a5ac2; }
+.liker-reaction.sad { background: #397dc4; }
+.liker-reaction.fire { background: #dd5d28; }
 .more-likers { margin: 8px 0 0; padding: 12px; border-radius: 11px; background: var(--surface-2); color: var(--muted); text-align: center; font-size: 12px; }
 .profile-media-editor { position: relative; padding-bottom: 4px; }
 .cover-picker { display: grid; place-items: center; width: 100%; height: 128px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(135deg, #8f1428, #d7334b 58%, #f6d264); background-position: center; background-size: cover; color: #fff; cursor: pointer; overflow: hidden; }

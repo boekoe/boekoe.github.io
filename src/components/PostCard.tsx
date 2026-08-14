@@ -37,7 +37,12 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReac
   const longPressed = useRef(false)
   const reactionArea = useRef<HTMLDivElement>(null)
   const isMine = post.author.id === currentUserId
-  const knownLikers = post.likedBy.map((id) => profiles.find((profile) => profile.id === id)).filter((profile): profile is Profile => Boolean(profile))
+  const knownLikers = post.likedBy.flatMap((id) => {
+    const profile = profiles.find((person) => person.id === id)
+    if (!profile) return []
+    const type = post.reactionsByUser?.[id] || (id === currentUserId ? post.reaction : undefined) || 'like'
+    return [{ profile, reaction: reactions.find((item) => item.type === type) || reactions[0] }]
+  })
   const unknownLikers = Math.max(0, post.likes - knownLikers.length)
   const activeReaction = reactions.find((item) => item.type === post.reaction)
   const totalVotes = post.poll?.options.reduce((total, option) => total + option.votes, 0) || 0
@@ -104,7 +109,7 @@ export function PostCard({ post, allPosts, profiles, currentUserId, busy, onReac
     {sharing && <Modal title="Bericht delen" onClose={() => setSharing(false)}><div className="modal-body share-dialog"><label>Caption<textarea value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={500} placeholder="Zeg iets over dit bericht…" autoFocus /></label><div className="share-options"><button className="primary" onClick={shareOnProfile} disabled={sharingProfile}>{sharingProfile ? <LoaderCircle className="spin" size={18} /> : <UserRound size={18} />} Delen op mijn profiel</button><button className="secondary" onClick={shareExternal}><Forward size={18} /> Delen via WhatsApp, Messenger…</button></div></div></Modal>}
     {editing && <Modal title="Bericht bewerken" onClose={() => setEditing(false)}><div className="modal-body edit-post-dialog"><textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={2000} autoFocus aria-label="Berichttekst" /><div className="form-actions"><button className="secondary" onClick={() => setEditing(false)} disabled={busy}>Annuleren</button><button className="primary" onClick={saveEdit} disabled={busy || !editBody.trim() || editBody.trim() === post.body}>{busy ? <LoaderCircle className="spin" size={18} /> : 'Wijzigingen opslaan'}</button></div></div></Modal>}
     {history && <Modal title="Eerdere versies" onClose={() => setHistory(false)}><div className="modal-body revision-list"><div className="revision current"><span>Huidige versie</span><p>{post.body}</p></div>{post.revisions.map((revision, index) => <div className="revision" key={revision.id}><span>Versie {post.revisions.length - index} · {new Date(revision.createdAt).toLocaleString('nl-NL')}</span><p>{revision.body}</p></div>)}</div></Modal>}
-    {likers && <Modal title="Likes" onClose={() => setLikers(false)}><div className="modal-body liker-list">{knownLikers.map((profile) => <div className="liker" key={profile.id}><Avatar profile={profile} size={42} /><div><Name profile={profile} /><small>@{profile.username}</small></div></div>)}{unknownLikers > 0 && <p className="more-likers">En {unknownLikers.toLocaleString('nl-NL')} {unknownLikers === 1 ? 'andere persoon' : 'andere mensen'}</p>}</div></Modal>}
+    {likers && <Modal title="Reacties" onClose={() => setLikers(false)}><div className="modal-body liker-list">{knownLikers.map(({ profile, reaction }) => <div className="liker" key={profile.id}><Avatar profile={profile} size={42} /><div className="liker-person"><Name profile={profile} /><small>@{profile.username}</small></div><span className={`liker-reaction ${reaction.type}`} title={reaction.label} aria-label={`Reageerde met ${reaction.label}`}><reaction.icon /><span>{reaction.label}</span></span></div>)}{unknownLikers > 0 && <p className="more-likers">En {unknownLikers.toLocaleString('nl-NL')} {unknownLikers === 1 ? 'andere persoon' : 'andere mensen'}</p>}</div></Modal>}
     {reporting && <Modal title="Bericht rapporteren" onClose={() => setReporting(false)}>
       <div className="modal-body"><p className="muted">Waarom wil je dit bericht rapporteren? De auteur ziet niet wie de melding heeft gedaan.</p>
         <div className="reason-list">{['Spam of ongewenste reclame', 'Haatdragend of intimiderend', 'Misleidende informatie', 'Naakt of gewelddadig beeld', 'Iets anders'].map((reason) => <button key={reason} onClick={() => { onReport(reason); setReporting(false); onToast('Melding ontvangen. Bedankt.') }}>{reason}<span>›</span></button>)}</div>

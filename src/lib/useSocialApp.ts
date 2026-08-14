@@ -13,7 +13,7 @@ const MESSAGES_STORAGE_KEY = 'boekoe-direct-messages-v1'
 
 type DemoState = { posts: Post[]; following: string[]; followers: string[]; blocked: string[]; notices: Notice[]; messages: DirectMessage[]; reports: Report[]; profile: Profile }
 type ProfileMedia = { avatar?: File | null; cover?: File | null }
-type PostExtras = Pick<Post, 'poll' | 'reaction' | 'reactionCounts' | 'visibility' | 'comments'>
+type PostExtras = Pick<Post, 'poll' | 'reaction' | 'reactionCounts' | 'reactionsByUser' | 'visibility' | 'comments'>
 
 const demoDefaults: DemoState = { posts: demoPosts, following: ['p1', 'p4'], followers: ['p1', 'p5'], blocked: [], notices: demoNotices, messages: demoMessages, reports: demoReports, profile: demoUser }
 
@@ -73,6 +73,7 @@ function normalizePost(post: Post): Post {
     imageUrls,
     likedBy: post.likedBy || [],
     reactionCounts: post.reactionCounts || { like: post.likes || 0 },
+    reactionsByUser: post.reactionsByUser || Object.fromEntries((post.likedBy || []).map((id) => [id, 'like' as ReactionType])),
     revisions: post.revisions || [],
     comments: (post.comments || []).map(normalizeComment),
     visibility: (post.visibility as string) === 'followers' ? 'friends' : post.visibility || 'public',
@@ -191,6 +192,7 @@ export function useSocialApp() {
         const postReactions = reactionRes.data?.filter((reaction: any) => reaction.post_id === post.id) || []
         if (postReactions.length) {
           post.reactionCounts = postReactions.reduce((counts: Partial<Record<ReactionType, number>>, reaction: any) => { const type = (reaction.reaction_type || 'like') as ReactionType; counts[type] = (counts[type] || 0) + 1; return counts }, {})
+          post.reactionsByUser = postReactions.reduce((byUser: Partial<Record<string, ReactionType>>, reaction: any) => { byUser[reaction.user_id] = (reaction.reaction_type || 'like') as ReactionType; return byUser }, {})
           post.reaction = postReactions.find((reaction: any) => reaction.user_id === userId)?.reaction_type as ReactionType | undefined
         }
         if (commentLikesRes.data) post.comments = post.comments.map((comment) => { const likes = commentLikesRes.data!.filter((like: any) => like.comment_id === comment.id).map((like: any) => like.user_id); return { ...comment, likes: likes.length, liked: likes.includes(userId), likedBy: likes } })
@@ -320,12 +322,16 @@ export function useSocialApp() {
     const next = posts.map((post) => {
       if (post.id !== postId) return post
       const reactionCounts = { ...post.reactionCounts }
+      const reactionsByUser = { ...post.reactionsByUser }
       if (oldReaction) reactionCounts[oldReaction] = Math.max(0, (reactionCounts[oldReaction] || 0) - 1)
       if (!removing) reactionCounts[reaction] = (reactionCounts[reaction] || 0) + 1
+      if (removing) delete reactionsByUser[profile.id]
+      else reactionsByUser[profile.id] = reaction
       return {
         ...post,
         reaction: removing ? undefined : reaction,
         reactionCounts,
+        reactionsByUser,
         liked: !removing,
         likes: Math.max(0, post.likes + (post.liked ? removing ? -1 : 0 : 1)),
         likedBy: removing ? post.likedBy.filter((id) => id !== profile.id) : [...new Set([...post.likedBy, profile.id])],
@@ -334,7 +340,7 @@ export function useSocialApp() {
     setPosts(next); persist({ posts: next })
     if (hasSupabase) {
       const extras = readLocalExtras(); const updated = next.find((post) => post.id === postId)
-      if (updated) extras[postId] = { ...(extras[postId] || {}), reaction: updated.reaction, reactionCounts: updated.reactionCounts }
+      if (updated) extras[postId] = { ...(extras[postId] || {}), reaction: updated.reaction, reactionCounts: updated.reactionCounts, reactionsByUser: updated.reactionsByUser }
       writeLocalExtras(extras)
     }
     if (supabase && session) {
