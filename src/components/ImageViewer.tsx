@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw, X } from 'lucide-react'
-import { TransformComponent, TransformWrapper, useControls, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch'
 
 const SLIDE_DURATION = 240
-
-function ZoomControls() {
-  const { zoomIn, zoomOut, resetTransform } = useControls()
-  return <div className="image-viewer-controls" aria-label="Zoomknoppen" onClick={(event) => event.stopPropagation()}>
-    <button type="button" onClick={() => zoomOut()} aria-label="Uitzoomen"><Minus /></button>
-    <button type="button" onClick={() => resetTransform()} aria-label="Originele grootte"><RotateCcw /></button>
-    <button type="button" onClick={() => zoomIn()} aria-label="Inzoomen"><Plus /></button>
-  </div>
-}
 
 type ImageViewerProps = {
   src: string
@@ -35,6 +26,7 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
   const moved = useRef(false)
   const slideTimer = useRef<number | null>(null)
   const recenterFrame = useRef<number | null>(null)
+  const orientationTimer = useRef<number | null>(null)
   const zoomRefs = useRef<Record<number, ReactZoomPanPinchContentRef | null>>({})
   const [index, setIndex] = useState(safeInitialIndex)
   const [targetIndex, setTargetIndex] = useState<number | null>(null)
@@ -118,31 +110,28 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
 
   useEffect(() => {
     const recenter = () => {
-      if (slideTimer.current !== null) {
-        window.clearTimeout(slideTimer.current)
-        slideTimer.current = null
-      }
+      if (orientationTimer.current !== null) window.clearTimeout(orientationTimer.current)
       if (recenterFrame.current !== null) window.cancelAnimationFrame(recenterFrame.current)
       gesture.current = null
       scale.current = 1
       setDragX(0)
-      setTargetIndex(null)
-      setSliding(false)
-      recenterFrame.current = window.requestAnimationFrame(() => {
+      orientationTimer.current = window.setTimeout(() => {
         recenterFrame.current = window.requestAnimationFrame(() => {
-          Object.values(zoomRefs.current).forEach((controls) => controls?.resetTransform(0))
-          recenterFrame.current = null
+          recenterFrame.current = window.requestAnimationFrame(() => {
+            Object.values(zoomRefs.current).forEach((controls) => controls?.resetTransform(0))
+            recenterFrame.current = null
+          })
         })
-      })
+        orientationTimer.current = null
+      }, 180)
     }
-    window.addEventListener('resize', recenter)
     window.addEventListener('orientationchange', recenter)
-    window.visualViewport?.addEventListener('resize', recenter)
+    window.screen.orientation?.addEventListener('change', recenter)
     return () => {
-      window.removeEventListener('resize', recenter)
       window.removeEventListener('orientationchange', recenter)
-      window.visualViewport?.removeEventListener('resize', recenter)
+      window.screen.orientation?.removeEventListener('change', recenter)
       if (slideTimer.current !== null) window.clearTimeout(slideTimer.current)
+      if (orientationTimer.current !== null) window.clearTimeout(orientationTimer.current)
       if (recenterFrame.current !== null) window.cancelAnimationFrame(recenterFrame.current)
     }
   }, [])
@@ -226,7 +215,6 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
           wheel={{ step: .18 }}
           onTransform={(_, state) => { if (slideIndex === index) scale.current = state.scale }}
         >
-          {slideIndex === index && <ZoomControls />}
           <TransformComponent wrapperClass="image-viewer-stage" contentClass="image-viewer-content">
             <img src={url} alt={slideIndex === index ? (altForIndex?.(slideIndex) || alt) : ''} draggable={false} onLoad={() => markReady(slideIndex)} />
           </TransformComponent>
