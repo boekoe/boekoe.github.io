@@ -153,6 +153,21 @@ create index if not exists direct_messages_sender_idx on public.direct_messages(
 create index if not exists direct_messages_recipient_idx on public.direct_messages(recipient_id, created_at desc);
 create index if not exists direct_messages_reply_to_idx on public.direct_messages(reply_to) where reply_to is not null;
 
+create or replace function public.direct_message_reply_matches(message_id uuid, message_sender uuid, message_recipient uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1 from public.direct_messages parent
+    where parent.id = message_id and (
+      (parent.sender_id = message_sender and parent.recipient_id = message_recipient) or
+      (parent.sender_id = message_recipient and parent.recipient_id = message_sender)
+    )
+  );
+$$;
+
+revoke all on function public.direct_message_reply_matches(uuid, uuid, uuid) from public;
+grant execute on function public.direct_message_reply_matches(uuid, uuid, uuid) to authenticated;
+
 -- Automatically create a safe profile for every new account.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public
@@ -299,13 +314,7 @@ create policy "Users send private messages" on public.direct_messages for insert
     (storage.foldername(attachment_path))[1] = auth.uid()::text and
     (storage.foldername(attachment_path))[2] = recipient_id::text
   )) and
-  (reply_to is null or exists (
-    select 1 from public.direct_messages parent
-    where parent.id = reply_to and (
-      (parent.sender_id = sender_id and parent.recipient_id = recipient_id) or
-      (parent.sender_id = recipient_id and parent.recipient_id = sender_id)
-    )
-  )) and
+  (reply_to is null or public.direct_message_reply_matches(reply_to, sender_id, recipient_id)) and
   not exists (
     select 1 from public.blocks b
     where (b.blocker_id = sender_id and b.blocked_id = recipient_id)

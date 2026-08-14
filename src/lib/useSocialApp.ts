@@ -546,7 +546,8 @@ export function useSocialApp() {
       return true
     } catch (messageError: any) {
       setError(messageError?.message || 'Bericht versturen mislukt')
-      setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, pending: false, failed: true } : message))
+      setMessages((current) => current.filter((message) => message.id !== optimisticId))
+      if (localPreview) URL.revokeObjectURL(localPreview)
       return false
     }
   }

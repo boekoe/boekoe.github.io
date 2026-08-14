@@ -42,12 +42,13 @@ function MessageStatus({ message }: { message: DirectMessage }) {
   return <span className="message-status" title="Verstuurd"><Check /></span>
 }
 
-export function Messages({ current, profiles, messages, activeRecipientId, busy, onSelect, onSend, onEdit, onDelete, onReact, onRead }: {
+export function Messages({ current, profiles, messages, activeRecipientId, busy, error, onSelect, onSend, onEdit, onDelete, onReact, onRead }: {
   current: Profile
   profiles: Profile[]
   messages: DirectMessage[]
   activeRecipientId?: string
   busy: boolean
+  error?: string
   onSelect: (profileId?: string) => void
   onSend: (profileId: string, body: string, options?: { replyTo?: string; file?: File }) => Promise<boolean>
   onEdit: (messageId: string, body: string) => Promise<boolean>
@@ -67,6 +68,7 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
   const [photoError, setPhotoError] = useState('')
   const [viewingImage, setViewingImage] = useState<{ src: string; alt: string; index: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [sendFailed, setSendFailed] = useState(false)
   const [otherTyping, setOtherTyping] = useState(false)
   const [otherOnline, setOtherOnline] = useState(false)
   const [unreadAnchor, setUnreadAnchor] = useState<string | null>(null)
@@ -95,10 +97,10 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
   const candidates = people.filter((person) => `${person.fullName} ${person.username}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   useEffect(() => {
-    if (!active) return
-    setUnreadAnchor(messages.find((message) => message.senderId === active.id && message.recipientId === current.id && !message.read)?.id || null)
-    setReplyingTo(null); setEditing(null); setBody(''); setAttachment(null); setSearchOpen(false); setThreadSearch(''); setActionMessageId(null)
-  }, [active?.id])
+    setUnreadAnchor(active ? messages.find((message) => message.senderId === active.id && message.recipientId === current.id && !message.read)?.id || null : null)
+    setReplyingTo(null); setEditing(null); setBody(''); setAttachment(null); setSearchOpen(false); setThreadSearch(''); setActionMessageId(null); setPhotoError(''); setSendFailed(false)
+    setAttachmentPreview((preview) => { if (preview) URL.revokeObjectURL(preview); return '' })
+  }, [activeRecipientId])
   useEffect(() => {
     if (!active) return
     const firstUnread = messages.find((message) => message.senderId === active.id && message.recipientId === current.id && !message.read)
@@ -142,7 +144,7 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
   }
 
   const clearComposer = () => {
-    setBody(''); setReplyingTo(null); setEditing(null); setAttachment(null); setPhotoError('')
+    setBody(''); setReplyingTo(null); setEditing(null); setAttachment(null); setPhotoError(''); setSendFailed(false)
     if (attachmentPreview) URL.revokeObjectURL(attachmentPreview)
     setAttachmentPreview('')
     broadcastTyping(false)
@@ -156,7 +158,9 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
     try {
       if (editing) {
         if (body.trim() && await onEdit(editing.id, body)) clearComposer()
+        else setSendFailed(true)
       } else if (await onSend(active.id, body, { replyTo: replyingTo?.id, file: attachment || undefined })) clearComposer()
+      else setSendFailed(true)
     } finally {
       setSubmitting(false)
     }
@@ -166,7 +170,7 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
     if (!file) return
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 8 * 1024 * 1024) { setPhotoError('Kies een JPG-, PNG-, WebP- of GIF-afbeelding tot 8 MB.'); return }
     if (attachmentPreview) URL.revokeObjectURL(attachmentPreview)
-    setAttachment(file); setAttachmentPreview(URL.createObjectURL(file)); setPhotoError('')
+    setAttachment(file); setAttachmentPreview(URL.createObjectURL(file)); setPhotoError(''); setSendFailed(false)
   }
 
   const startEdit = (message: DirectMessage) => {
@@ -216,8 +220,8 @@ export function Messages({ current, profiles, messages, activeRecipientId, busy,
         <form className="message-compose" onSubmit={submit}>
           {(replyingTo || editing) && <div className="message-compose-context"><span>{editing ? <Edit3 /> : <Reply />}</span><div><strong>{editing ? 'Bericht bewerken' : `Antwoord aan ${replyingTo?.senderId === current.id ? 'jezelf' : active.fullName}`}</strong><small>{editing ? editing.body : replyingTo && messagePreview(replyingTo)}</small></div><button type="button" onClick={() => { setReplyingTo(null); setEditing(null); setBody('') }} aria-label="Annuleren"><X /></button></div>}
           {attachmentPreview && <div className="message-attachment-preview"><img src={attachmentPreview} alt="Te versturen foto" /><button type="button" onClick={() => { setAttachment(null); setAttachmentPreview('') }} aria-label="Foto verwijderen"><X /></button></div>}
-          {photoError && <p className="message-photo-error">{photoError}</p>}
-          <div className="message-compose-row"><button type="button" className="attach-message" onClick={() => fileInput.current?.click()} disabled={Boolean(editing) || submitting} aria-label="Foto toevoegen"><ImagePlus /></button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => { choosePhoto(event.target.files?.[0]); event.currentTarget.value = '' }} /><textarea ref={input} value={body} onChange={(event) => { setBody(event.target.value); broadcastTyping(Boolean(event.target.value.trim())) }} onBlur={() => broadcastTyping(false)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} rows={1} placeholder={editing ? 'Bewerk je bericht…' : 'Schrijf een privébericht…'} aria-label="Privébericht schrijven" /><button className="send-message" disabled={(!body.trim() && !attachment) || busy || submitting} aria-label={editing ? 'Wijziging opslaan' : 'Privébericht verzenden'}>{editing ? <Check /> : <Send />}</button></div>
+          {(photoError || sendFailed) && <p className="message-photo-error" role="alert">{photoError || error || 'Versturen mislukt. Probeer het opnieuw.'}</p>}
+          <div className="message-compose-row"><button type="button" className="attach-message" onClick={() => fileInput.current?.click()} disabled={Boolean(editing) || submitting} aria-label="Foto toevoegen"><ImagePlus /></button><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => { choosePhoto(event.target.files?.[0]); event.currentTarget.value = '' }} /><textarea ref={input} value={body} onChange={(event) => { setBody(event.target.value); setSendFailed(false); broadcastTyping(Boolean(event.target.value.trim())) }} onBlur={() => broadcastTyping(false)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} rows={1} placeholder={editing ? 'Bewerk je bericht…' : 'Schrijf een privébericht…'} aria-label="Privébericht schrijven" /><button className="send-message" disabled={(!body.trim() && !attachment) || busy || submitting} aria-label={editing ? 'Wijziging opslaan' : 'Privébericht verzenden'}>{editing ? <Check /> : <Send />}</button></div>
         </form></> : <EmptyState icon={<MessageCircle />} title="Kies een gesprek" text="Selecteer een gesprek of zoek iemand om privé te berichten." />}
     </div>
     {viewingImage && <ImageViewer src={viewingImage.src} alt={viewingImage.alt} images={threadPhotos.map((message) => message.attachmentUrl!)} initialIndex={viewingImage.index} altForIndex={() => `Foto in gesprek met ${active?.fullName || 'deze persoon'}`} onClose={() => setViewingImage(null)} />}
