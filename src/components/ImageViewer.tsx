@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw, X } from 'lucide-react'
-import { TransformComponent, TransformWrapper, useControls } from 'react-zoom-pan-pinch'
+import { TransformComponent, TransformWrapper, useControls, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch'
 
 const SLIDE_DURATION = 240
 
@@ -16,53 +16,97 @@ function ZoomControls() {
 type ImageViewerProps = {
   src: string
   alt: string
+  images?: string[]
+  initialIndex?: number
+  altForIndex?: (index: number) => string
+  onIndexChange?: (index: number) => void
   onClose: () => void
-  onPrevious?: () => void
-  onNext?: () => void
-  previousSrc?: string
-  nextSrc?: string
-  position?: string
 }
 
-export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc, nextSrc, position }: ImageViewerProps) {
+function neighbourIndices(index: number, length: number) {
+  return [index - 1, index, index + 1].filter((item) => item >= 0 && item < length)
+}
+
+export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, onIndexChange, onClose }: ImageViewerProps) {
+  const gallery = useMemo(() => images?.length ? images : [src], [images, src])
+  const safeInitialIndex = Math.min(Math.max(0, initialIndex), gallery.length - 1)
   const gesture = useRef<{ x: number; y: number; time: number } | null>(null)
   const scale = useRef(1)
   const moved = useRef(false)
   const slideTimer = useRef<number | null>(null)
+  const zoomRefs = useRef<Record<number, ReactZoomPanPinchContentRef | null>>({})
+  const [index, setIndex] = useState(safeInitialIndex)
+  const [targetIndex, setTargetIndex] = useState<number | null>(null)
   const [dragX, setDragX] = useState(0)
-  const [sliding, setSliding] = useState<'previous' | 'next' | 'center' | null>(null)
+  const [sliding, setSliding] = useState(false)
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [viewportRevision, setViewportRevision] = useState(0)
+  const [viewportWidth, setViewportWidth] = useState(() => window.visualViewport?.width || window.innerWidth)
+  const [mountedIndices, setMountedIndices] = useState<Set<number>>(() => new Set(neighbourIndices(safeInitialIndex, gallery.length)))
+  const [readyIndices, setReadyIndices] = useState<Set<number>>(() => new Set([safeInitialIndex]))
 
-  const finishNavigation = useCallback((direction: 'previous' | 'next') => {
+  const canGoPrevious = index > 0 && readyIndices.has(index - 1)
+  const canGoNext = index < gallery.length - 1 && readyIndices.has(index + 1)
+
+  const markReady = useCallback((readyIndex: number) => {
+    setReadyIndices((current) => {
+      if (current.has(readyIndex)) return current
+      const next = new Set(current)
+      next.add(readyIndex)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const neighbours = neighbourIndices(index, gallery.length)
+    setMountedIndices((current) => {
+      const next = new Set(current)
+      neighbours.forEach((item) => next.add(item))
+      return next
+    })
+    neighbours.forEach((item) => {
+      const preloader = new window.Image()
+      const ready = () => markReady(item)
+      preloader.onload = ready
+      preloader.onerror = ready
+      preloader.src = gallery[item]
+      if (preloader.complete) {
+        if (typeof preloader.decode === 'function') preloader.decode().then(ready).catch(ready)
+        else ready()
+      }
+    })
+  }, [gallery, index, markReady])
+
+  const settleAt = useCallback((nextIndex: number, updateIndex: boolean) => {
     if (slideTimer.current !== null) window.clearTimeout(slideTimer.current)
-    setSliding(direction)
+    setTargetIndex(nextIndex)
     setDragX(0)
+    setSliding(true)
     slideTimer.current = window.setTimeout(() => {
-      if (direction === 'next') onNext?.()
-      else onPrevious?.()
-      setSliding(null)
-      scale.current = 1
+      if (updateIndex) {
+        setIndex(nextIndex)
+        onIndexChange?.(nextIndex)
+        scale.current = 1
+      }
+      setTargetIndex(null)
+      setSliding(false)
       slideTimer.current = null
     }, SLIDE_DURATION)
-  }, [onNext, onPrevious])
+  }, [onIndexChange])
 
-  const returnToCenter = () => {
-    if (slideTimer.current !== null) window.clearTimeout(slideTimer.current)
-    setSliding('center')
-    setDragX(0)
-    slideTimer.current = window.setTimeout(() => {
-      setSliding(null)
-      slideTimer.current = null
-    }, SLIDE_DURATION)
-  }
+  const goPrevious = useCallback(() => {
+    if (!sliding && canGoPrevious) settleAt(index - 1, true)
+  }, [canGoPrevious, index, settleAt, sliding])
+
+  const goNext = useCallback(() => {
+    if (!sliding && canGoNext) settleAt(index + 1, true)
+  }, [canGoNext, index, settleAt, sliding])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
-      else if (event.key === 'ArrowLeft' && onPrevious && !sliding) finishNavigation('previous')
-      else if (event.key === 'ArrowRight' && onNext && !sliding) finishNavigation('next')
+      else if (event.key === 'ArrowLeft') goPrevious()
+      else if (event.key === 'ArrowRight') goNext()
     }
     document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', handleKey)
@@ -70,21 +114,17 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKey)
     }
-  }, [finishNavigation, onClose, onNext, onPrevious, sliding])
-
-  useEffect(() => {
-    const preload = (url?: string) => { if (url) { const image = new window.Image(); image.src = url } }
-    preload(previousSrc)
-    preload(nextSrc)
-  }, [previousSrc, nextSrc])
+  }, [goNext, goPrevious, onClose])
 
   useEffect(() => {
     const recenter = () => {
       gesture.current = null
       scale.current = 1
       setDragX(0)
-      setSliding(null)
-      setViewportRevision((value) => value + 1)
+      setTargetIndex(null)
+      setSliding(false)
+      setViewportWidth(window.visualViewport?.width || window.innerWidth)
+      Object.values(zoomRefs.current).forEach((controls) => controls?.resetTransform(0))
     }
     window.addEventListener('resize', recenter)
     window.addEventListener('orientationchange', recenter)
@@ -113,7 +153,7 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
     if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return
     if (Math.abs(dx) <= Math.abs(dy)) return
     moved.current = true
-    const unavailable = (dx > 0 && !onPrevious) || (dx < 0 && !onNext)
+    const unavailable = (dx > 0 && !canGoPrevious) || (dx < 0 && !canGoNext)
     setDragX(unavailable ? dx * .22 : dx)
   }
 
@@ -126,10 +166,10 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
     const dy = touch.clientY - start.y
     const elapsed = Math.max(1, performance.now() - start.time)
     const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15
-    const committed = horizontal && (Math.abs(dx) > Math.min(90, window.innerWidth * .18) || Math.abs(dx) / elapsed > .55)
-    if (committed && dx < 0 && onNext) finishNavigation('next')
-    else if (committed && dx > 0 && onPrevious) finishNavigation('previous')
-    else if (Math.abs(dx) > 7) returnToCenter()
+    const committed = horizontal && (Math.abs(dx) > Math.min(90, viewportWidth * .18) || Math.abs(dx) / elapsed > .55)
+    if (committed && dx < 0 && canGoNext) goNext()
+    else if (committed && dx > 0 && canGoPrevious) goPrevious()
+    else if (Math.abs(dx) > 7) settleAt(index, false)
   }
 
   const toggleChrome = () => {
@@ -137,8 +177,10 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
     setChromeVisible((visible) => !visible)
   }
 
+  const displayedIndex = targetIndex ?? index
   const trackStyle = {
-    '--gallery-drag': `${dragX}px`,
+    '--gallery-count': gallery.length,
+    '--gallery-offset': `${-displayedIndex * viewportWidth + dragX}px`,
   } as React.CSSProperties
 
   return <div
@@ -149,19 +191,19 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
     onTouchStartCapture={startGesture}
     onTouchMoveCapture={moveGesture}
     onTouchEndCapture={endGesture}
-    onTouchCancelCapture={() => { gesture.current = null; setDragX(0) }}
+    onTouchCancelCapture={() => { gesture.current = null; settleAt(index, false) }}
   >
     <div className="image-viewer-chrome">
       <button type="button" className="image-viewer-close" onClick={onClose} aria-label="Sluiten"><X /></button>
-      {onPrevious && <button type="button" className="image-viewer-nav previous" onClick={() => !sliding && finishNavigation('previous')} aria-label="Vorige afbeelding"><ChevronLeft /></button>}
-      {onNext && <button type="button" className="image-viewer-nav next" onClick={() => !sliding && finishNavigation('next')} aria-label="Volgende afbeelding"><ChevronRight /></button>}
-      {position && <span className="image-viewer-position">{position}</span>}
+      {index > 0 && <button type="button" className="image-viewer-nav previous" onClick={goPrevious} disabled={!canGoPrevious} aria-label="Vorige afbeelding"><ChevronLeft /></button>}
+      {index < gallery.length - 1 && <button type="button" className="image-viewer-nav next" onClick={goNext} disabled={!canGoNext} aria-label="Volgende afbeelding"><ChevronRight /></button>}
+      {gallery.length > 1 && <span className="image-viewer-position">{index + 1} / {gallery.length}</span>}
     </div>
-    <div className={`image-viewer-track ${sliding ? `sliding-${sliding}` : ''} ${dragX ? 'dragging' : ''}`} style={trackStyle}>
-      <div className="image-viewer-slide adjacent" aria-hidden="true">{previousSrc && <img src={previousSrc} alt="" draggable={false} />}</div>
-      <div className="image-viewer-slide current" onClick={toggleChrome}>
-        <TransformWrapper
-          key={`${src}-${viewportRevision}`}
+    <div className={`image-viewer-track ${sliding ? 'sliding' : ''} ${dragX ? 'dragging' : ''}`} style={trackStyle}>
+      {gallery.map((url, slideIndex) => <div className={`image-viewer-slide ${slideIndex === index ? 'current' : 'adjacent'}`} key={`${url}-${slideIndex}`} onClick={slideIndex === index ? toggleChrome : undefined} aria-hidden={slideIndex === index ? undefined : true}>
+        {mountedIndices.has(slideIndex) && <TransformWrapper
+          ref={(controls) => { zoomRefs.current[slideIndex] = controls }}
+          disabled={slideIndex !== index || sliding}
           initialScale={1}
           minScale={1}
           maxScale={6}
@@ -170,16 +212,15 @@ export function ImageViewer({ src, alt, onClose, onPrevious, onNext, previousSrc
           limitToBounds
           doubleClick={{ mode: 'toggle', step: 1.4 }}
           wheel={{ step: .18 }}
-          onTransform={(_, state) => { scale.current = state.scale }}
+          onTransform={(_, state) => { if (slideIndex === index) scale.current = state.scale }}
         >
-          <ZoomControls />
+          {slideIndex === index && <ZoomControls />}
           <TransformComponent wrapperClass="image-viewer-stage" contentClass="image-viewer-content">
-            <img src={src} alt={alt} draggable={false} />
+            <img src={url} alt={slideIndex === index ? (altForIndex?.(slideIndex) || alt) : ''} draggable={false} onLoad={() => markReady(slideIndex)} />
           </TransformComponent>
-        </TransformWrapper>
-      </div>
-      <div className="image-viewer-slide adjacent" aria-hidden="true">{nextSrc && <img src={nextSrc} alt="" draggable={false} />}</div>
+        </TransformWrapper>}
+      </div>)}
     </div>
-    <p className="image-viewer-hint">{onNext ? 'Schuif voor de volgende foto · Knijp om te zoomen' : 'Knijp of dubbeltik om in te zoomen'}</p>
+    <p className="image-viewer-hint">{gallery.length > 1 ? 'Schuif voor de volgende foto · Knijp om te zoomen' : 'Knijp of dubbeltik om in te zoomen'}</p>
   </div>
 }
