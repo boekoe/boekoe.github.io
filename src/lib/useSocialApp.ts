@@ -75,6 +75,7 @@ function normalizePost(post: Post): Post {
     likedBy: post.likedBy || [],
     reactionCounts: post.reactionCounts || { like: post.likes || 0 },
     reactionsByUser: post.reactionsByUser || Object.fromEntries((post.likedBy || []).map((id) => [id, 'like' as ReactionType])),
+    poll: post.poll ? { ...post.poll, options: post.poll.options.map((option) => ({ ...option, votes: option.votes || 0, voterIds: option.voterIds || [] })) } : undefined,
     revisions: post.revisions || [],
     comments: (post.comments || []).map(normalizeComment),
     visibility: (post.visibility as string) === 'followers' ? 'friends' : post.visibility || 'public',
@@ -197,6 +198,7 @@ export function useSocialApp() {
     const client = supabase
     setBusy(true)
     const userId = activeSession.user.id
+    let pollVoterProfiles: Profile[] = []
     const [profileRes, feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes, messagesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.from('posts').select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').order('created_at', { ascending: false }).limit(50),
@@ -233,6 +235,11 @@ export function useSocialApp() {
         commentIds.length ? supabase.from('comment_likes').select('comment_id,user_id').in('comment_id', commentIds) : Promise.resolve({ data: null }),
         postIds.length ? supabase.from('poll_votes').select('post_id,option_id,user_id').in('post_id', postIds) : Promise.resolve({ data: null }),
       ])
+      const pollVoterIds = [...new Set((pollVotesRes.data || []).map((vote: any) => vote.user_id).filter(Boolean))]
+      if (pollVoterIds.length) {
+        const voterProfilesRes = await supabase.from('profiles').select('*').in('id', pollVoterIds)
+        if (voterProfilesRes.data) pollVoterProfiles = voterProfilesRes.data.map(rowProfile)
+      }
       const serverPosts = feedRes.data.map((row: any) => {
         const post = rowPost(row, userId, serverRevisions[row.id] || localRevisions[row.id] || [], localMedia[row.id] || [], localExtras[row.id] || {})
         const postReactions = reactionRes.data?.filter((reaction: any) => reaction.post_id === post.id) || []
@@ -252,7 +259,11 @@ export function useSocialApp() {
     }
     const blockedIds = blocksRes.data?.map((row: any) => row.blocked_id) || []
     setBlocked(blockedIds)
-    if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile).filter((person) => !blockedIds.includes(person.id)))
+    if (profilesRes.data) {
+      const combinedProfiles = [...profilesRes.data.map(rowProfile), ...pollVoterProfiles]
+      const uniqueProfiles = [...new Map(combinedProfiles.map((person) => [person.id, person])).values()]
+      setProfiles(uniqueProfiles.filter((person) => !blockedIds.includes(person.id)))
+    }
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
     if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, targetUrl: row.target_url || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))

@@ -21,12 +21,16 @@
 :root[data-theme='dark'] {
   color: #f5f5f5;
   background: #252728;
+  --green: #ff4d62;
+  --green-2: #ff7181;
+  --red: #ff4d62;
+  --icon-accent: #ff4d62;
   --text: #f5f5f5;
   --muted: #b0b2b3;
   --line: #454748;
   --surface: #2c2e2f;
   --surface-2: #343637;
-  --green-soft: #321117;
+  --green-soft: #4a151d;
   --shadow: 0 10px 35px rgba(0, 0, 0, .55);
 }
 
@@ -56,6 +60,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .icon-button:hover { background: var(--green-soft); color: var(--green); }
 .icon-button svg { width: 21px; }
 .icon-button.subtle { background: transparent; color: var(--muted); }
+:root[data-theme='dark'] .icon-button.subtle { color: var(--icon-accent); }
 .avatar-button { background: none; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; height: 42px; }
 .avatar-button:hover { border-color: var(--green); }
 .avatar { object-fit: cover; border-radius: 50%; flex: 0 0 auto; background: var(--green-soft); }
@@ -212,8 +217,13 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .poll-options button { position: relative; min-height: 42px; padding: 0 11px; display: flex; align-items: center; justify-content: space-between; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; color: var(--text); background: var(--surface); cursor: pointer; }
 .poll-options button.voted { border-color: var(--green); }
 .poll-fill { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--green-soft) 75%, transparent); transition: width .35s ease; }
+:root[data-theme='dark'] .poll-fill { background: color-mix(in srgb, var(--icon-accent) 42%, transparent); }
 .poll-label, .poll-options strong { position: relative; z-index: 1; }
-.post-poll > small { display: block; margin-top: 9px; color: var(--muted); }
+.poll-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
+.poll-footer small { color: var(--muted); }
+.poll-voters-button { min-height: 29px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; color: var(--green); background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.poll-voters-button:hover:not(:disabled) { background: var(--green-soft); }
+.poll-voters-button:disabled { color: var(--muted); cursor: default; opacity: .7; }
 .comments { border-top: 1px solid var(--line); padding: 13px 17px 15px; display: grid; gap: 12px; }
 .comment-preview .comment:nth-of-type(n+3) { display: none; }
 .open-comments { border: 0; border-radius: 10px; padding: 9px; background: var(--surface-2); color: var(--green); font-weight: 700; cursor: pointer; }
@@ -368,6 +378,17 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .liker-reaction.sad { background: #397dc4; }
 .liker-reaction.fire { background: #dd5d28; }
 .more-likers { margin: 8px 0 0; padding: 12px; border-radius: 11px; background: var(--surface-2); color: var(--muted); text-align: center; font-size: 12px; }
+.poll-voter-list { display: grid; gap: 15px; }
+.poll-voter-group { display: grid; gap: 5px; }
+.poll-voter-group h3 { margin: 0 0 2px; padding: 0 4px 7px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.poll-voter-group h3 span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.poll-voter-group h3 strong { min-width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--green); font-size: 10px; }
+.poll-voter { min-width: 0; padding: 6px 4px; display: flex; align-items: center; gap: 9px; border-radius: 10px; }
+.poll-voter:hover { background: var(--surface-2); }
+.poll-voter > div { min-width: 0; display: grid; }
+.poll-voter .person-name, .poll-voter > div > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.poll-voter small { color: var(--muted); font-size: 10px; }
+.unknown-voter { color: var(--muted); }
 .profile-media-editor { position: relative; padding-bottom: 4px; }
 .cover-picker { display: grid; place-items: center; width: 100%; height: 128px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(135deg, #8f1428, #d7334b 58%, #f6d264); background-position: center; background-size: cover; color: #fff; cursor: pointer; overflow: hidden; }
 .cover-picker span { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border-radius: 10px; background: rgba(0,0,0,.58); font-size: 12px; font-weight: 700; }
