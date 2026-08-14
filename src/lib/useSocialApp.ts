@@ -150,7 +150,7 @@ async function hydrateMessages(rows: any[]): Promise<DirectMessage[]> {
     attachmentUrl: row.attachment_path ? signedByPath.get(row.attachment_path) : undefined,
     editedAt: row.edited_at || undefined,
     deletedAt: row.deleted_at || undefined,
-    reactions: (row.reactions || {}) as Record<string, MessageReaction>,
+    reactions: Object.fromEntries(Object.entries(row.reactions || {}).map(([userId, reaction]) => [userId, reaction === '❤' ? '❤️' : reaction])) as Record<string, MessageReaction>,
   }))
 }
 
@@ -590,21 +590,25 @@ export function useSocialApp() {
   const toggleMessageReaction = async (messageId: string, reaction: MessageReaction) => {
     if (!profile) return false
     setError('')
+    const previousReactions = { ...(messages.find((message) => message.id === messageId)?.reactions || {}) }
+    const optimisticReactions = { ...previousReactions }
+    if (optimisticReactions[profile.id] === reaction) delete optimisticReactions[profile.id]
+    else optimisticReactions[profile.id] = reaction
+    setMessages((current) => current.map((message) => message.id === messageId ? { ...message, reactions: optimisticReactions } : message))
     if (supabase && session) {
       const result = await supabase.rpc('toggle_direct_message_reaction', { message_id: messageId, reaction })
-      if (result.error) { setError(result.error.message); return false }
-      const serverReactions = (result.data?.reactions || {}) as Record<string, MessageReaction>
+      if (result.error) {
+        setMessages((current) => current.map((message) => message.id === messageId ? { ...message, reactions: previousReactions } : message))
+        setError(result.error.message)
+        return false
+      }
+      const updatedRow = Array.isArray(result.data) ? result.data[0] : result.data
+      const serverReactions = Object.fromEntries(Object.entries(updatedRow?.reactions || optimisticReactions).map(([userId, value]) => [userId, value === '❤' ? '❤️' : value])) as Record<string, MessageReaction>
       setMessages((current) => current.map((message) => message.id === messageId ? { ...message, reactions: serverReactions } : message))
       return true
     }
     setMessages((current) => {
-      const next = current.map((message) => {
-        if (message.id !== messageId) return message
-        const reactions = { ...(message.reactions || {}) }
-        if (reactions[profile.id] === reaction) delete reactions[profile.id]
-        else reactions[profile.id] = reaction
-        return { ...message, reactions }
-      })
+      const next = current.map((message) => message.id === messageId ? { ...message, reactions: optimisticReactions } : message)
       writeLocalMessages(profile.id, next); persist({ messages: next })
       return next
     })

@@ -356,7 +356,8 @@ as $$
 declare updated public.direct_messages;
 declare current_reaction text;
 begin
-  if reaction not in ('👍', '❤️', '😂', '😮', '😢', '🙏') then raise exception 'Ongeldige reactie'; end if;
+  reaction := replace(reaction, chr(65039), '');
+  if reaction not in ('👍', chr(10084), '😂', '😮', '😢', '🙏') then raise exception 'Ongeldige reactie'; end if;
   select reactions ->> auth.uid()::text into current_reaction from public.direct_messages
   where id = message_id and deleted_at is null and auth.uid() in (sender_id, recipient_id);
   if not found then raise exception 'Bericht niet gevonden'; end if;
