@@ -61,6 +61,15 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .icon-button svg { width: 21px; }
 .icon-button.subtle { background: transparent; color: var(--muted); }
 :root[data-theme='dark'] .icon-button.subtle { color: var(--icon-accent); }
+:root[data-theme='dark'] svg { color: var(--icon-accent); }
+:root[data-theme='dark'] .primary svg,
+:root[data-theme='dark'] .secondary svg,
+:root[data-theme='dark'] .danger svg,
+:root[data-theme='dark'] .topbar svg,
+:root[data-theme='dark'] .reaction-picker button svg,
+:root[data-theme='dark'] .active-reaction svg,
+:root[data-theme='dark'] .stat-reaction svg,
+:root[data-theme='dark'] .liker-reaction svg { color: inherit; }
 .avatar-button { background: none; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; height: 42px; }
 .avatar-button:hover { border-color: var(--green); }
 .avatar { object-fit: cover; border-radius: 50%; flex: 0 0 auto; background: var(--green-soft); }
