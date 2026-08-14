@@ -218,7 +218,7 @@ export default function App() {
   const [editing, setEditing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileMenu, setMobileMenu] = useState(false)
-  const [pushPromptMode, setPushPromptMode] = useState<'login' | 'settings' | null>(null)
+  const [pushPromptMode, setPushPromptMode] = useState<'login' | 'profile' | 'settings' | null>(null)
   const [pushSettingsRefresh, setPushSettingsRefresh] = useState(0)
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('boekoe-theme', dark ? 'dark' : 'light') }, [dark])
   const unread = store.notices.filter((notice) => !notice.read).length
@@ -263,6 +263,18 @@ export default function App() {
     return () => { cancelled = true }
   }, [store.online, store.profile?.id, store.session?.user.id])
 
+  // The own profile page is the browser's reliable place to manage notifications.
+  // Do not persist the close action here: on every reload/visit it must return
+  // until push notifications have actually been enabled.
+  useEffect(() => {
+    if (!store.online || !store.session?.user.id || !store.profile || view !== 'profile' || profileUsername.toLowerCase() !== store.profile.username.toLowerCase()) return
+    let cancelled = false
+    getPushCapability().then((capability) => {
+      if (!cancelled && capability !== 'subscribed') setPushPromptMode('profile')
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [view, profileUsername, store.online, store.profile?.id, store.profile?.username, store.session?.user.id])
+
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
@@ -270,7 +282,6 @@ export default function App() {
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
   const openSettings = () => {
     setSettingsOpen(true)
-    if (store.online) setPushPromptMode('settings')
   }
   const closePushPrompt = (rememberDismissal = true) => {
     if (rememberDismissal && pushPromptMode === 'login' && store.session?.user.id) {
