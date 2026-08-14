@@ -69,7 +69,19 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 :root[data-theme='dark'] .reaction-picker button svg,
 :root[data-theme='dark'] .active-reaction svg,
 :root[data-theme='dark'] .stat-reaction svg,
-:root[data-theme='dark'] .liker-reaction svg { color: inherit; }
+:root[data-theme='dark'] .liker-reaction svg,
+:root[data-theme='dark'] .composer .tool-button svg,
+:root[data-theme='dark'] .send-button svg,
+:root[data-theme='dark'] .send-comment svg,
+:root[data-theme='dark'] .send-message svg,
+:root[data-theme='dark'] .follow svg,
+:root[data-theme='dark'] .notice-icon svg,
+:root[data-theme='dark'] .avatar-picker > span svg,
+:root[data-theme='dark'] .image-preview button svg,
+:root[data-theme='dark'] .message-attachment-preview > button svg,
+:root[data-theme='dark'] .message-bubble-row.mine .message-bubble svg,
+:root[data-theme='dark'] .image-viewer svg,
+:root[data-theme='dark'] .cover-picker svg { color: inherit; }
 .avatar-button { background: none; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; height: 42px; }
 .avatar-button:hover { border-color: var(--green); }
 .avatar { object-fit: cover; border-radius: 50%; flex: 0 0 auto; background: var(--green-soft); }
@@ -570,6 +582,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .message-status svg { width: 12px; height: 12px; }
 .message-status.read { color: #aee7ff; }
 .message-status.failed { color: #ffd0d6; }
+.message-bubble-row.mine .message-status { color: #fff; }
 .message-day, .unread-divider { display: flex; align-items: center; gap: 9px; margin: 16px 0 10px; color: var(--muted); font-size: 9px; font-weight: 700; text-align: center; }
 .message-day::before, .message-day::after, .unread-divider::before, .unread-divider::after { content: ''; height: 1px; flex: 1; background: var(--line); }
 .message-day span { padding: 4px 8px; border-radius: 10px; background: var(--surface); }
