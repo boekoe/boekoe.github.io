@@ -155,6 +155,7 @@ export function useSocialApp() {
 
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
+    const client = supabase
     setBusy(true)
     const userId = activeSession.user.id
     const [profileRes, feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes, messagesRes] = await Promise.all([
@@ -172,6 +173,12 @@ export function useSocialApp() {
       const localRevisions = readLocalRevisions()
       const localMedia = readLocalMedia()
       const localExtras = readLocalExtras()
+      const localPollBackfills = feedRes.data.filter((row: any) => !row.poll_data && row.user_id === userId && localExtras[row.id]?.poll).map((row: any) => {
+        const localPoll = localExtras[row.id].poll!
+        const sharedPoll = { question: localPoll.question, options: localPoll.options.map((option) => ({ id: option.id, text: option.text, votes: 0, voterIds: [] })) }
+        return client.from('posts').update({ poll_data: sharedPoll }).eq('id', row.id).eq('user_id', userId)
+      })
+      if (localPollBackfills.length) await Promise.all(localPollBackfills)
       const postIds = feedRes.data.map((row: any) => row.id)
       let serverRevisions: Record<string, PostRevision[]> = {}
       if (postIds.length) {
@@ -239,7 +246,10 @@ export function useSocialApp() {
   useEffect(() => {
     if (!supabase || !session) return
     const client = supabase
-    const channel = client.channel('boekoe-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => loadOnline(session)).subscribe()
+    const channel = client.channel('boekoe-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => loadOnline(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, () => loadOnline(session))
+      .subscribe()
     return () => { client.removeChannel(channel) }
   }, [session, loadOnline])
 
@@ -356,6 +366,18 @@ export function useSocialApp() {
 
   const votePoll = async (postId: string, optionId: string) => {
     if (!profile) return
+    setError('')
+    const previous = posts.find((post) => post.id === postId)?.poll?.votedOptionId
+    if (supabase && session) {
+      if (previous) {
+        const removed = await supabase.from('poll_votes').delete().eq('post_id', postId).eq('user_id', session.user.id)
+        if (removed.error) { setError(removed.error.message); return }
+      }
+      if (previous !== optionId) {
+        const inserted = await supabase.from('poll_votes').insert({ post_id: postId, option_id: optionId, user_id: session.user.id })
+        if (inserted.error) { setError(inserted.error.message); return }
+      }
+    }
     const next = posts.map((post) => {
       if (post.id !== postId || !post.poll) return post
       const previous = post.poll.votedOptionId
@@ -368,11 +390,6 @@ export function useSocialApp() {
     setPosts(next); persist({ posts: next })
     const updated = next.find((post) => post.id === postId)
     if (updated?.poll) { const extras = readLocalExtras(); extras[postId] = { ...(extras[postId] || {}), poll: updated.poll }; writeLocalExtras(extras) }
-    if (supabase && session) {
-      const previous = posts.find((post) => post.id === postId)?.poll?.votedOptionId
-      if (previous) await supabase.from('poll_votes').delete().eq('post_id', postId).eq('user_id', session.user.id)
-      if (previous !== optionId) await supabase.from('poll_votes').insert({ post_id: postId, option_id: optionId, user_id: session.user.id })
-    }
   }
 
   const updatePost = async (postId: string, body: string) => {
