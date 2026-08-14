@@ -93,4 +93,4 @@ export type Report = {
   createdAt: string
 }
 
-export type AppView = 'feed' | 'discover' | 'compose' | 'notifications' | 'messages' | 'profile' | 'moderation' | 'comments'
+export type AppView = 'feed' | 'discover' | 'compose' | 'notifications' | 'messages' | 'profile' | 'moderation' | 'post' | 'comments'

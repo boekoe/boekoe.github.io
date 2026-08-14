@@ -85,6 +85,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .mobile-theme-toggle { display: none !important; }
 .content { min-width: 0; grid-column: 2; grid-row: 1; }
 .page-stack { display: grid; gap: 18px; }
+.post-view-back { width: fit-content; padding: 5px 2px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
 .feed-intro, .simple-title { display: flex; justify-content: space-between; padding: 5px 4px 2px; }
 .feed-intro h1, .simple-title h1 { font-size: 24px; margin-bottom: 3px; letter-spacing: -.03em; }

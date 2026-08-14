@@ -36,7 +36,7 @@ function readHashRoute() {
   try { parts = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map((part) => decodeURIComponent(part)) } catch { return { view: 'feed' as AppView } }
   if (parts[0] === 'profile' && parts[1]) return { view: 'profile' as AppView, username: parts[1] }
   if (parts[0] === 'post' && parts[1] && parts[2] === 'comments') return { view: 'comments' as AppView, postId: parts[1] }
-  if (parts[0] === 'post' && parts[1]) return { view: 'feed' as AppView, postId: parts[1] }
+  if (parts[0] === 'post' && parts[1]) return { view: 'post' as AppView, postId: parts[1] }
   if (parts[0] === 'messages') return { view: 'messages' as AppView, recipientId: parts[1] }
   if (['feed', 'discover', 'compose', 'notifications', 'profile', 'moderation'].includes(parts[0])) return { view: parts[0] as AppView }
   return { view: 'feed' as AppView }
@@ -190,6 +190,7 @@ export default function App() {
   const [view, setView] = useState<AppView>(initialRoute.view)
   const [profileUsername, setProfileUsername] = useState(initialRoute.username || '')
   const [activeRecipientId, setActiveRecipientId] = useState(initialRoute.recipientId || '')
+  const [activePostId, setActivePostId] = useState(initialRoute.postId || '')
   const [dark, setDark] = useState(() => localStorage.getItem('boekoe-theme') === 'dark')
   const [toast, setToast] = useState('')
   const [editing, setEditing] = useState(false)
@@ -207,26 +208,20 @@ export default function App() {
       setView(route.view)
       setProfileUsername(route.username || '')
       setActiveRecipientId(route.recipientId || '')
+      setActivePostId(route.postId || '')
       setMobileMenu(false)
-      if (!route.postId || route.view === 'comments') window.scrollTo({ top: 0, behavior: 'smooth' })
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
     }
     window.addEventListener('hashchange', applyHash)
     if (window.location.hash) applyHash()
     return () => window.removeEventListener('hashchange', applyHash)
   }, [])
 
-  useEffect(() => {
-    const route = readHashRoute()
-    if (!route.postId || view !== 'feed') return
-    const timer = window.setTimeout(() => document.getElementById(`post-${route.postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
-    return () => window.clearTimeout(timer)
-  }, [feed, view])
-
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
-  const activePostId = readHashRoute().postId
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
   const go = (next: AppView) => {
     const hash = next === 'profile' ? `/profile/${encodeURIComponent(profile.username)}` : `/${next}`
@@ -262,13 +257,14 @@ export default function App() {
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
       <main className="content">
         {view === 'feed' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} onProfile={() => go('profile')} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(item.id, reaction)} onVote={(optionId) => store.votePoll(item.id, optionId)} onEdit={(body) => store.updatePost(item.id, body)} onDelete={() => store.deletePost(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => blockProfile(item.author.id, item.author.fullName)} onToast={setToast} />)}</div>}
+        {view === 'post' && <div className="page-stack post-view"><button className="thread-back post-view-back" onClick={() => go('feed')}><ArrowLeft /> Terug naar overzicht</button>{activePost ? <PostCard post={activePost} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(activePost.id, reaction)} onVote={(optionId) => store.votePoll(activePost.id, optionId)} onEdit={(body) => store.updatePost(activePost.id, body)} onDelete={() => store.deletePost(activePost.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(activePost.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(activePost, caption)} onReport={(reason) => store.submitReport(activePost.id, reason)} onBlock={() => blockProfile(activePost.author.id, activePost.author.fullName)} onToast={setToast} /> : <section className="card page-card"><EmptyState icon={<MessageCircle />} title="Bericht niet gevonden" text="Dit bericht bestaat niet of is verwijderd." /></section>}</div>}
         {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onProfile={() => go('profile')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpenPost={(postId) => { window.location.hash = `/post/${encodeURIComponent(postId)}` }} onRead={store.markNoticesRead} />}
         {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={activeRecipientId} busy={store.busy} onSelect={(id) => { setActiveRecipientId(id || ''); window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onRead={store.markMessageThreadRead} />}
         {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
-        {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
+        {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => { window.location.hash = activePostId ? `/post/${encodeURIComponent(activePostId)}` : '/feed' }} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
       </main>
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
