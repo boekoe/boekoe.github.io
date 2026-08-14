@@ -217,6 +217,8 @@ export default function App() {
   const [editing, setEditing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileMenu, setMobileMenu] = useState(false)
+  const [pushPromptMode, setPushPromptMode] = useState<'login' | 'settings' | null>(null)
+  const [pushSettingsRefresh, setPushSettingsRefresh] = useState(0)
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('boekoe-theme', dark ? 'dark' : 'light') }, [dark])
   const unread = store.notices.filter((notice) => !notice.read).length
   const unreadMessages = store.messages.filter((message) => message.recipientId === store.profile?.id && !message.read).length
@@ -240,11 +242,31 @@ export default function App() {
     return () => window.removeEventListener('hashchange', applyHash)
   }, [])
 
+  useEffect(() => {
+    const userId = store.session?.user.id
+    if (!store.online || !userId || !store.profile || !window.matchMedia(MOBILE_VIEW_QUERY).matches) return
+    const seenKey = `boekoe-push-prompt-seen-${userId}`
+    if (localStorage.getItem(seenKey)) return
+    let cancelled = false
+    getPushCapability().then((capability) => {
+      if (!cancelled && capability !== 'subscribed') setPushPromptMode('login')
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [store.online, store.profile?.id, store.session?.user.id])
+
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
   if (!store.profile) return null
   const profile = store.profile
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
+  const openSettings = () => {
+    setSettingsOpen(true)
+    if (store.online && window.matchMedia(MOBILE_VIEW_QUERY).matches) setPushPromptMode('settings')
+  }
+  const closePushPrompt = () => {
+    if (pushPromptMode === 'login' && store.session?.user.id) localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1')
+    setPushPromptMode(null)
+  }
   const go = (next: AppView) => {
     const hash = next === 'profile' ? `/profile/${encodeURIComponent(profile.username)}` : `/${next}`
     if (window.location.hash === `#${hash}`) {
@@ -284,7 +306,7 @@ export default function App() {
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpen={(notice) => { window.location.hash = notice.targetUrl ? notice.targetUrl.replace(/^#/, '') : notice.postId ? `/post/${encodeURIComponent(notice.postId)}` : '/notifications' }} onRead={store.markNoticesRead} />}
         {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={activeRecipientId} busy={store.busy} error={store.error} onSelect={(id) => { setActiveRecipientId(id || ''); window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onEdit={store.editMessage} onDelete={store.deleteMessage} onReact={store.toggleMessageReaction} onRead={store.markMessageThreadRead} />}
-        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onSettings={() => setSettingsOpen(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
+        {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onSettings={openSettings} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
         {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => { window.location.hash = activePostId ? `/post/${encodeURIComponent(activePostId)}` : '/feed' }} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
         {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
@@ -292,13 +314,52 @@ export default function App() {
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
     <nav className="bottom-nav">{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</span></button>)}</nav>
-    {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} onClose={() => setSettingsOpen(false)} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
+    {pushPromptMode && store.online && <PushPrompt userId={profile.id} onClose={closePushPrompt} onEnabled={() => { if (store.session?.user.id) localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1'); setPushSettingsRefresh((value) => value + 1); setToast('Pushmeldingen staan aan') }} />}
+    {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} pushRefresh={pushSettingsRefresh} onClose={() => { setSettingsOpen(false); if (pushPromptMode === 'settings') setPushPromptMode(null) }} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
 }
 
-function PushSettings({ userId }: { userId: string }) {
+function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: () => void; onEnabled: () => void }) {
+  const [capability, setCapability] = useState<PushCapability | 'loading'>('loading')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    getPushCapability().then((nextCapability) => { if (!cancelled) setCapability(nextCapability) }).catch(() => { if (!cancelled) setCapability('unsupported') })
+    return () => { cancelled = true }
+  }, [])
+
+  const enable = async () => {
+    setBusy(true); setError('')
+    try {
+      const preferences = await loadNotificationPreferences(userId)
+      await enablePush(userId)
+      await saveNotificationPreferences(userId, { ...preferences, pushEnabled: true })
+      onEnabled()
+      onClose()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Meldingen konden niet worden aangezet.')
+      setCapability(await getPushCapability())
+    } finally { setBusy(false) }
+  }
+
+  if (capability === 'loading' || capability === 'subscribed') return null
+  const needsInstall = capability === 'ios-install-required'
+  const denied = capability === 'denied'
+  const unsupported = capability === 'unsupported'
+  const title = needsInstall ? 'Zet Boekoe op je beginscherm' : denied ? 'Meldingen zijn geblokkeerd' : unsupported ? 'Meldingen niet beschikbaar' : 'Mis niets van Boekoe'
+  const text = needsInstall ? 'Tik in Safari op Deel en kies “Zet op beginscherm”. Open daarna Boekoe vanaf je beginscherm om meldingen aan te zetten.'
+    : denied ? 'Sta meldingen toe via de instellingen van je telefoon of browser. Daarna kun je ze hier inschakelen.'
+      : unsupported ? 'Deze browser ondersteunt geen pushmeldingen voor Boekoe.'
+        : 'Ontvang een melding bij nieuwe chatberichten, reacties en vriendschapsverzoeken.'
+
+  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={onClose} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
+}
+
+function PushSettings({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
   const [capability, setCapability] = useState<PushCapability | 'loading'>('loading')
   const [preferences, setPreferences] = useState<NotificationPreferences>(defaultNotificationPreferences)
   const [busy, setBusy] = useState(false)
@@ -310,7 +371,7 @@ function PushSettings({ userId }: { userId: string }) {
       if (!cancelled) { setCapability(nextCapability); setPreferences(nextPreferences) }
     }).catch(() => { if (!cancelled) setCapability('unsupported') })
     return () => { cancelled = true }
-  }, [userId])
+  }, [userId, refreshKey])
 
   const togglePush = async () => {
     setBusy(true); setError('')
@@ -356,11 +417,11 @@ function PushSettings({ userId }: { userId: string }) {
   </section>
 }
 
-function SettingsPanel({ userId, dark, online, onClose, onToggleTheme, onEditProfile, onLogout, onReset }: { userId: string; dark: boolean; online: boolean; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onLogout: () => void; onReset: () => void }) {
+function SettingsPanel({ userId, dark, online, pushRefresh, onClose, onToggleTheme, onEditProfile, onLogout, onReset }: { userId: string; dark: boolean; online: boolean; pushRefresh: number; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onLogout: () => void; onReset: () => void }) {
   return <Modal title="Instellingen" onClose={onClose}><div className="modal-body settings-panel">
     <button type="button" onClick={onEditProfile}><UserRound /><span><strong>Profiel bewerken</strong><small>Naam, bio en profielfoto aanpassen</small></span><ChevronRight /></button>
     <button type="button" onClick={onToggleTheme}>{dark ? <Sun /> : <Moon />}<span><strong>{dark ? 'Lichte modus' : 'Donkere modus'}</strong><small>De weergave direct omschakelen</small></span><ChevronRight /></button>
-    {online && <PushSettings userId={userId} />}
+    {online && <PushSettings userId={userId} refreshKey={pushRefresh} />}
     {online ? <button type="button" className="danger-text" onClick={onLogout}><LogOut /><span><strong>Uitloggen</strong><small>Dit account op dit apparaat afmelden</small></span><ChevronRight /></button> : <button type="button" onClick={onReset}><MoreHorizontal /><span><strong>Demo herstellen</strong><small>Lokale demogegevens opnieuw instellen</small></span><ChevronRight /></button>}
   </div></Modal>
 }
