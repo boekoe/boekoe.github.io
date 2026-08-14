@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import type { DirectMessage, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
+import type { DirectMessage, MessageReaction, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
 import { demoMessages, demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
 
@@ -131,6 +131,29 @@ const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file)
 })
 
+async function hydrateMessages(rows: any[]): Promise<DirectMessage[]> {
+  const paths = [...new Set(rows.map((row) => row.attachment_path).filter(Boolean))] as string[]
+  const signedByPath = new Map<string, string>()
+  if (supabase && paths.length) {
+    const { data } = await supabase.storage.from('chat-media').createSignedUrls(paths, 3600)
+    data?.forEach((item) => { if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl) })
+  }
+  return rows.map((row): DirectMessage => ({
+    id: row.id,
+    senderId: row.sender_id,
+    recipientId: row.recipient_id,
+    body: row.body || '',
+    createdAt: row.created_at,
+    read: row.read,
+    replyTo: row.reply_to || undefined,
+    attachmentPath: row.attachment_path || undefined,
+    attachmentUrl: row.attachment_path ? signedByPath.get(row.attachment_path) : undefined,
+    editedAt: row.edited_at || undefined,
+    deletedAt: row.deleted_at || undefined,
+    reactions: (row.reactions || {}) as Record<string, MessageReaction>,
+  }))
+}
+
 export function useSocialApp() {
   const initial = useMemo(readDemo, [])
   const [session, setSession] = useState<Session | null>(null)
@@ -152,6 +175,15 @@ export function useSocialApp() {
     const value = { posts, following, followers, blocked, notices, messages, reports, profile: profile || demoUser, ...next }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
   }, [posts, following, followers, blocked, notices, messages, reports, profile])
+
+  const loadMessages = useCallback(async (userId: string) => {
+    if (!supabase) return
+    const result = await supabase.from('direct_messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order('created_at', { ascending: true }).limit(500)
+    if (!result.data) return
+    const loaded = await hydrateMessages(result.data)
+    setMessages(loaded)
+    writeLocalMessages(userId, loaded)
+  }, [])
 
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
@@ -218,7 +250,7 @@ export function useSocialApp() {
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
     if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
     if (messagesRes.data) {
-      const loaded = messagesRes.data.map((row: any): DirectMessage => ({ id: row.id, senderId: row.sender_id, recipientId: row.recipient_id, body: row.body, createdAt: row.created_at, read: row.read }))
+      const loaded = await hydrateMessages(messagesRes.data)
       setMessages(loaded); writeLocalMessages(userId, loaded)
     } else setMessages(readLocalMessages(userId))
     if (profileRes.data?.is_admin) {
@@ -256,9 +288,9 @@ export function useSocialApp() {
   useEffect(() => {
     if (!supabase || !session) return
     const client = supabase
-    const channel = client.channel(`boekoe-messages-${session.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => loadOnline(session)).subscribe()
+    const channel = client.channel(`boekoe-messages-${session.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, () => loadMessages(session.user.id)).subscribe()
     return () => { client.removeChannel(channel) }
-  }, [session, loadOnline])
+  }, [session, loadMessages])
 
   const authenticate = async (mode: 'login' | 'signup', email: string, password: string, fullName = '', username = '') => {
     if (!supabase) return { ok: true, message: '' }
@@ -465,17 +497,116 @@ export function useSocialApp() {
     }
   }
 
-  const sendMessage = async (recipientId: string, body: string) => {
-    if (!profile || recipientId === profile.id || !body.trim() || blocked.includes(recipientId)) return false
-    const message: DirectMessage = { id: crypto.randomUUID(), senderId: profile.id, recipientId, body: body.trim(), createdAt: new Date().toISOString(), read: false }
-    setBusy(true); setError('')
-    if (supabase && session) {
-      const result = await supabase.from('direct_messages').insert({ id: message.id, sender_id: session.user.id, recipient_id: recipientId, body: message.body }).select('id,created_at').single()
-      if (result.data) { message.id = result.data.id; message.createdAt = result.data.created_at }
-      if (result.error && !result.error.message.toLowerCase().includes('direct_messages')) setError(result.error.message)
+  const sendMessage = async (recipientId: string, body: string, options: { replyTo?: string; file?: File } = {}) => {
+    if (!profile || recipientId === profile.id || (!body.trim() && !options.file) || blocked.includes(recipientId)) return false
+    if (options.file && (!options.file.type.startsWith('image/') || options.file.size > 8 * 1024 * 1024)) { setError('Kies een JPG-, PNG-, WebP- of GIF-afbeelding tot 8 MB.'); return false }
+    const optimisticId = crypto.randomUUID()
+    const localPreview = options.file ? URL.createObjectURL(options.file) : undefined
+    const optimistic: DirectMessage = { id: optimisticId, senderId: profile.id, recipientId, body: body.trim(), createdAt: new Date().toISOString(), read: false, replyTo: options.replyTo, attachmentUrl: localPreview, reactions: {}, pending: true }
+    setError('')
+    setMessages((current) => [...current, optimistic])
+    try {
+      let attachmentPath: string | undefined
+      let attachmentUrl = localPreview
+      if (supabase && session) {
+        if (options.file) {
+          const extension = (options.file.name.split('.').pop() || options.file.type.split('/')[1] || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '')
+          attachmentPath = `${session.user.id}/${recipientId}/${crypto.randomUUID()}.${extension}`
+          const upload = await supabase.storage.from('chat-media').upload(attachmentPath, options.file, { contentType: options.file.type, upsert: false })
+          if (upload.error) throw upload.error
+          const signed = await supabase.storage.from('chat-media').createSignedUrl(attachmentPath, 3600)
+          attachmentUrl = signed.data?.signedUrl
+        }
+        const result = await supabase.from('direct_messages').insert({
+          id: optimisticId,
+          sender_id: session.user.id,
+          recipient_id: recipientId,
+          body: optimistic.body || null,
+          reply_to: options.replyTo || null,
+          attachment_path: attachmentPath || null,
+        }).select('*').single()
+        if (result.error) {
+          if (attachmentPath) await supabase.storage.from('chat-media').remove([attachmentPath])
+          throw result.error
+        }
+        const sent: DirectMessage = { ...optimistic, id: result.data.id, createdAt: result.data.created_at, attachmentPath, attachmentUrl, pending: false }
+        setMessages((current) => current.map((message) => message.id === optimisticId ? sent : message))
+        if (localPreview) URL.revokeObjectURL(localPreview)
+        return true
+      }
+
+      if (options.file) attachmentUrl = await fileToDataUrl(options.file)
+      const sent: DirectMessage = { ...optimistic, attachmentUrl, pending: false }
+      setMessages((current) => {
+        const next = current.map((message) => message.id === optimisticId ? sent : message)
+        writeLocalMessages(profile.id, next); persist({ messages: next })
+        return next
+      })
+      if (localPreview) URL.revokeObjectURL(localPreview)
+      return true
+    } catch (messageError: any) {
+      setError(messageError?.message || 'Bericht versturen mislukt')
+      setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, pending: false, failed: true } : message))
+      return false
     }
-    const next = [...messages, message]
-    setMessages(next); writeLocalMessages(profile.id, next); persist({ messages: next }); setBusy(false)
+  }
+
+  const editMessage = async (messageId: string, body: string) => {
+    if (!profile || !body.trim()) return false
+    setError('')
+    if (supabase && session) {
+      const result = await supabase.rpc('edit_direct_message', { message_id: messageId, new_body: body.trim() })
+      if (result.error) { setError(result.error.message); return false }
+    }
+    const editedAt = new Date().toISOString()
+    setMessages((current) => {
+      const next = current.map((message) => message.id === messageId && message.senderId === profile.id ? { ...message, body: body.trim(), editedAt } : message)
+      writeLocalMessages(profile.id, next); persist({ messages: next })
+      return next
+    })
+    return true
+  }
+
+  const deleteMessage = async (messageId: string) => {
+    if (!profile) return false
+    const target = messages.find((message) => message.id === messageId && message.senderId === profile.id)
+    if (!target) return false
+    setError('')
+    if (supabase && session) {
+      const result = await supabase.rpc('delete_direct_message', { message_id: messageId })
+      if (result.error) { setError(result.error.message); return false }
+      if (target.attachmentPath) await supabase.storage.from('chat-media').remove([target.attachmentPath])
+    }
+    const deletedAt = new Date().toISOString()
+    setMessages((current) => {
+      const next = current.map((message) => message.id === messageId ? { ...message, body: '', attachmentPath: undefined, attachmentUrl: undefined, deletedAt, editedAt: undefined, reactions: {} } : message)
+      writeLocalMessages(profile.id, next); persist({ messages: next })
+      return next
+    })
+    return true
+  }
+
+  const toggleMessageReaction = async (messageId: string, reaction: MessageReaction) => {
+    if (!profile) return false
+    setError('')
+    if (supabase && session) {
+      const result = await supabase.rpc('toggle_direct_message_reaction', { message_id: messageId, reaction })
+      if (result.error) { setError(result.error.message); return false }
+      const serverReactions = (result.data?.reactions || {}) as Record<string, MessageReaction>
+      setMessages((current) => current.map((message) => message.id === messageId ? { ...message, reactions: serverReactions } : message))
+      return true
+    }
+    setMessages((current) => {
+      const next = current.map((message) => {
+        if (message.id !== messageId) return message
+        const reactions = { ...(message.reactions || {}) }
+        if (reactions[profile.id] === reaction) delete reactions[profile.id]
+        else reactions[profile.id] = reaction
+        return { ...message, reactions }
+      })
+      writeLocalMessages(profile.id, next); persist({ messages: next })
+      return next
+    })
     return true
   }
 
@@ -573,5 +704,5 @@ export function useSocialApp() {
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
   return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, messages, reports, busy, error,
-    authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+    authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

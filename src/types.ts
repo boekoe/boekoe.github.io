@@ -81,7 +81,17 @@ export type DirectMessage = {
   body: string
   createdAt: string
   read: boolean
+  replyTo?: string
+  attachmentPath?: string
+  attachmentUrl?: string
+  editedAt?: string
+  deletedAt?: string
+  reactions?: Record<string, MessageReaction>
+  pending?: boolean
+  failed?: boolean
 }
+
+export type MessageReaction = '👍' | '❤️' | '😂' | '😮' | '😢' | '🙏'
 
 export type Report = {
   id: string
