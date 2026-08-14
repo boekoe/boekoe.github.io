@@ -93,7 +93,7 @@ function Compose({ profile, posts, busy, autofocus = false, onProfile, onPost }:
   return <section className="card composer">
     <button type="button" className="composer-avatar" onClick={onProfile} aria-label="Naar mijn profiel"><Avatar profile={profile} size={44} /></button>
     <div className="composer-main">
-      <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder={`Wat wil je delen, ${profile.fullName.split(' ')[0]}?`} />
+      <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder="Waar denk je aan?" />
       <LinkPreview text={body} posts={posts} />
       {photoError && <p className="composer-error" role="alert">{photoError}</p>}
       {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); setPhotoError('') }} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
@@ -189,6 +189,7 @@ export default function App() {
   const initialRoute = useMemo(readHashRoute, [])
   const [view, setView] = useState<AppView>(initialRoute.view)
   const [profileUsername, setProfileUsername] = useState(initialRoute.username || '')
+  const [activeRecipientId, setActiveRecipientId] = useState(initialRoute.recipientId || '')
   const [dark, setDark] = useState(() => localStorage.getItem('boekoe-theme') === 'dark')
   const [toast, setToast] = useState('')
   const [editing, setEditing] = useState(false)
@@ -205,6 +206,7 @@ export default function App() {
       const route = readHashRoute()
       setView(route.view)
       setProfileUsername(route.username || '')
+      setActiveRecipientId(route.recipientId || '')
       setMobileMenu(false)
       if (!route.postId || route.view === 'comments') window.scrollTo({ top: 0, behavior: 'smooth' })
     }
@@ -263,7 +265,7 @@ export default function App() {
         {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onProfile={() => go('profile')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpenPost={(postId) => { window.location.hash = `/post/${encodeURIComponent(postId)}` }} onRead={store.markNoticesRead} />}
-        {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={readHashRoute().recipientId} busy={store.busy} onSelect={(id) => { window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onRead={store.markMessageThreadRead} />}
+        {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={activeRecipientId} busy={store.busy} onSelect={(id) => { setActiveRecipientId(id || ''); window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onRead={store.markMessageThreadRead} />}
         {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
         {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => go('feed')} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
