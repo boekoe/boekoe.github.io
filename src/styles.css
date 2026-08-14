@@ -537,6 +537,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
   .feed-intro p, .simple-title p { font-size: 13px; }
   .card { border-radius: 17px; }
   .composer { padding: 14px; }
+  .composer:not(.composer-fullscreen) .composer-tools { display: none; }
   .composer-avatar, .composer-avatar .avatar { width: 38px !important; height: 38px !important; }
   .composer-tools { flex-wrap: wrap; }
   .char-count { display: none; }
