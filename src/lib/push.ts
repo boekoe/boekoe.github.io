@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 export const VAPID_PUBLIC_KEY = 'BJoA9RcMcfB7JSiuDGOr1iSTCp5J1yulgU6KtDzW7EE6wkOxIuQzshmpn1YD_ftZK_9YZ-sW5P331vw7x8C7ERc'
 
 export type PushCapability = 'unsupported' | 'ios-install-required' | 'denied' | 'available' | 'subscribed'
+export type PushInstallContext = 'ios' | 'android-chrome' | 'android-other' | 'other'
 
 export type NotificationPreferences = {
   pushEnabled: boolean
@@ -22,6 +23,20 @@ export const defaultNotificationPreferences: NotificationPreferences = {
 
 const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+
+export function getPushInstallContext(): PushInstallContext {
+  const userAgent = navigator.userAgent
+  if (isIos()) return 'ios'
+  if (/Android/i.test(userAgent)) {
+    const chrome = /Chrome\/\d/i.test(userAgent) && !/Edg|OPR|SamsungBrowser|Firefox|MiuiBrowser/i.test(userAgent)
+    return chrome ? 'android-chrome' : 'android-other'
+  }
+  return 'other'
+}
+
+export function getOpenInChromeUrl() {
+  return `googlechrome://navigate?url=${encodeURIComponent(window.location.href)}`
+}
 
 function decodeApplicationServerKey(value: string) {
   const padding = '='.repeat((4 - value.length % 4) % 4)

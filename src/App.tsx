@@ -15,11 +15,12 @@ import { PostImages } from './components/PostImages'
 import { Messages } from './components/Messages'
 import {
   defaultNotificationPreferences, disablePush, enablePush, getPushCapability,
-  loadNotificationPreferences, saveNotificationPreferences,
+  getOpenInChromeUrl, getPushInstallContext, loadNotificationPreferences, saveNotificationPreferences,
   type NotificationPreferences, type PushCapability,
 } from './lib/push'
 
 const MOBILE_VIEW_QUERY = '(max-width: 780px), (max-height: 520px) and (pointer: coarse)'
+const PUSH_PROMPT_INTERVAL = 7 * 24 * 60 * 60 * 1000
 
 const nav = [
   { view: 'feed' as AppView, label: 'Start', icon: Home },
@@ -246,7 +247,15 @@ export default function App() {
     const userId = store.session?.user.id
     if (!store.online || !userId || !store.profile || !window.matchMedia(MOBILE_VIEW_QUERY).matches) return
     const seenKey = `boekoe-push-prompt-seen-${userId}`
-    if (localStorage.getItem(seenKey)) return
+    const dismissedKey = `boekoe-push-prompt-dismissed-${userId}`
+    const legacySeen = localStorage.getItem(seenKey)
+    let dismissedAt = Number(localStorage.getItem(dismissedKey) || 0)
+    // Migrate the old permanent flag without showing the banner again immediately.
+    if (!dismissedAt && legacySeen) {
+      dismissedAt = Date.now()
+      localStorage.setItem(dismissedKey, String(dismissedAt))
+    }
+    if (dismissedAt && Date.now() - dismissedAt < PUSH_PROMPT_INTERVAL) return
     let cancelled = false
     getPushCapability().then((capability) => {
       if (!cancelled && capability !== 'subscribed') setPushPromptMode('login')
@@ -261,10 +270,14 @@ export default function App() {
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
   const openSettings = () => {
     setSettingsOpen(true)
-    if (store.online && window.matchMedia(MOBILE_VIEW_QUERY).matches) setPushPromptMode('settings')
+    if (store.online) setPushPromptMode('settings')
   }
   const closePushPrompt = () => {
-    if (pushPromptMode === 'login' && store.session?.user.id) localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1')
+    if (pushPromptMode === 'login' && store.session?.user.id) {
+      const userId = store.session.user.id
+      localStorage.setItem(`boekoe-push-prompt-seen-${userId}`, '1')
+      localStorage.setItem(`boekoe-push-prompt-dismissed-${userId}`, String(Date.now()))
+    }
     setPushPromptMode(null)
   }
   const go = (next: AppView) => {
@@ -314,7 +327,7 @@ export default function App() {
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
     <nav className="bottom-nav">{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</span></button>)}</nav>
-    {pushPromptMode && store.online && <PushPrompt userId={profile.id} onClose={closePushPrompt} onEnabled={() => { if (store.session?.user.id) localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1'); setPushSettingsRefresh((value) => value + 1); setToast('Pushmeldingen staan aan') }} />}
+    {pushPromptMode && store.online && <PushPrompt userId={profile.id} onClose={closePushPrompt} onEnabled={() => { if (store.session?.user.id) { localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1'); localStorage.removeItem(`boekoe-push-prompt-dismissed-${store.session.user.id}`) }; setPushSettingsRefresh((value) => value + 1); setToast('Pushmeldingen staan aan') }} />}
     {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} pushRefresh={pushSettingsRefresh} onClose={() => { setSettingsOpen(false); if (pushPromptMode === 'settings') setPushPromptMode(null) }} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
@@ -350,13 +363,22 @@ function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: (
   const needsInstall = capability === 'ios-install-required'
   const denied = capability === 'denied'
   const unsupported = capability === 'unsupported'
+  const installContext = getPushInstallContext()
   const title = needsInstall ? 'Zet Boekoe op je beginscherm' : denied ? 'Meldingen zijn geblokkeerd' : unsupported ? 'Meldingen niet beschikbaar' : 'Mis niets van Boekoe'
-  const text = needsInstall ? 'Tik in Safari op Deel en kies “Zet op beginscherm”. Open daarna Boekoe vanaf je beginscherm om meldingen aan te zetten.'
+  const text = needsInstall ? 'Open deze pagina in Safari, tik op Deel en kies “Zet op beginscherm”. Open daarna Boekoe vanaf je beginscherm om meldingen aan te zetten.'
     : denied ? 'Sta meldingen toe via de instellingen van je telefoon of browser. Daarna kun je ze hier inschakelen.'
       : unsupported ? 'Deze browser ondersteunt geen pushmeldingen voor Boekoe.'
         : 'Ontvang een melding bij nieuwe chatberichten, reacties en vriendschapsverzoeken.'
+  const installHelp = installContext === 'android-chrome'
+    ? 'Voor de beste werking: tik in Chrome op ⋮ → “Installeren” of “Toevoegen aan startscherm” en open daarna Boekoe vanuit het icoon.'
+    : installContext === 'android-other'
+      ? 'Gebruik Chrome voor pushmeldingen: open Boekoe daar en kies in het menu ⋮ → “Installeren” of “Toevoegen aan startscherm”.'
+      : installContext === 'other' && unsupported
+        ? 'Open Boekoe in Chrome en kies in het menu ⋮ → “Installeren” of “Toevoegen aan startscherm”.'
+        : ''
+  const chromeUrl = installContext === 'android-other' || (installContext === 'other' && unsupported) ? getOpenInChromeUrl() : ''
 
-  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={onClose} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
+  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={onClose} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{installHelp && <p className="push-prompt-install-help">{installHelp}</p>}{chromeUrl && <a className="push-prompt-link" href={chromeUrl}>Open Boekoe in Chrome</a>}{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
 }
 
 function PushSettings({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {

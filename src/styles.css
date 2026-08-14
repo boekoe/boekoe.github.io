@@ -407,6 +407,8 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .push-prompt > div { min-width: 0; }
 .push-prompt strong { display: block; font-size: 14px; }
 .push-prompt p { margin: 4px 0 11px; color: var(--muted); font-size: 12px; line-height: 1.42; }
+.push-prompt .push-prompt-install-help { margin-top: -3px; }
+.push-prompt-link { display: inline-flex; align-items: center; min-height: 34px; margin: -2px 0 10px; color: var(--green); font-size: 12px; font-weight: 800; text-decoration: underline; }
 .push-prompt .primary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
 .push-prompt-close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; cursor: pointer; }
 .push-prompt-close:hover { color: var(--text); background: var(--surface-2); }
