@@ -272,8 +272,8 @@ export default function App() {
     setSettingsOpen(true)
     if (store.online) setPushPromptMode('settings')
   }
-  const closePushPrompt = () => {
-    if (pushPromptMode === 'login' && store.session?.user.id) {
+  const closePushPrompt = (rememberDismissal = true) => {
+    if (rememberDismissal && pushPromptMode === 'login' && store.session?.user.id) {
       const userId = store.session.user.id
       localStorage.setItem(`boekoe-push-prompt-seen-${userId}`, '1')
       localStorage.setItem(`boekoe-push-prompt-dismissed-${userId}`, String(Date.now()))
@@ -334,7 +334,7 @@ export default function App() {
   </div>
 }
 
-function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: () => void; onEnabled: () => void }) {
+function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: (rememberDismissal?: boolean) => void; onEnabled: () => void }) {
   const [capability, setCapability] = useState<PushCapability | 'loading'>('loading')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -352,7 +352,7 @@ function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: (
       await enablePush(userId)
       await saveNotificationPreferences(userId, { ...preferences, pushEnabled: true })
       onEnabled()
-      onClose()
+      onClose(false)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Meldingen konden niet worden aangezet.')
       setCapability(await getPushCapability())
@@ -378,7 +378,7 @@ function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: (
         : ''
   const chromeUrl = installContext === 'android-other' || (installContext === 'other' && unsupported) ? getOpenInChromeUrl() : ''
 
-  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={onClose} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{installHelp && <p className="push-prompt-install-help">{installHelp}</p>}{chromeUrl && <a className="push-prompt-link" href={chromeUrl}>Open Boekoe in Chrome</a>}{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
+  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={() => onClose()} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{installHelp && <p className="push-prompt-install-help">{installHelp}</p>}{chromeUrl && <a className="push-prompt-link" href={chromeUrl}>Open Boekoe in Chrome</a>}{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
 }
 
 function PushSettings({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
