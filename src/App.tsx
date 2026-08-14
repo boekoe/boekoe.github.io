@@ -60,7 +60,7 @@ function friendshipLabel(status: FriendshipStatus) {
   return 'Vriend toevoegen'
 }
 
-function Compose({ profile, posts, busy, autofocus = false, onProfile, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; onProfile: () => void; onPost: (body: string, files: File[], visibility: Post['visibility'], poll?: { question: string; options: string[] }) => Promise<boolean> }) {
+function Compose({ profile, posts, busy, autofocus = false, fullscreen = false, onProfile, onClose, onExpand, onPost }: { profile: Profile; posts: ReturnType<typeof useSocialApp>['posts']; busy: boolean; autofocus?: boolean; fullscreen?: boolean; onProfile: () => void; onClose?: () => void; onExpand?: () => void; onPost: (body: string, files: File[], visibility: Post['visibility'], poll?: { question: string; options: string[] }) => Promise<boolean> }) {
   const [body, setBody] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [photoError, setPhotoError] = useState('')
@@ -72,6 +72,12 @@ function Compose({ profile, posts, busy, autofocus = false, onProfile, onPost }:
   const input = useRef<HTMLInputElement>(null)
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview)), [previews])
+  useEffect(() => {
+    if (!fullscreen || !window.matchMedia('(max-width: 780px)').matches) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [fullscreen])
   const choose = (selected: FileList | null) => {
     const chosen = Array.from(selected || [])
     const next = chosen.filter((file) => file.type.startsWith('image/') && file.size <= 8 * 1024 * 1024)
@@ -90,10 +96,18 @@ function Compose({ profile, posts, busy, autofocus = false, onProfile, onPost }:
     if (await onPost(body, files, visibility, poll)) { setBody(''); setFiles([]); setPhotoError(''); setPollOpen(false); setPollQuestion(''); setPollOptions(['', '']) }
   }
   const privacy = visibility === 'public' ? { label: 'Iedereen', icon: Globe2 } : visibility === 'private' ? { label: 'Private', icon: Lock } : { label: 'Alleen vrienden', icon: Users }
-  return <section className="card composer">
+  const expandOnMobile = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (!onExpand || !window.matchMedia('(max-width: 780px)').matches) return
+    event.preventDefault()
+    event.currentTarget.blur()
+    onExpand()
+  }
+  return <section className={`card composer ${fullscreen ? 'composer-fullscreen' : ''}`}>
+    {fullscreen && <header className="composer-mobile-header"><button type="button" className="icon-button" onClick={onClose} aria-label="Nieuw bericht sluiten"><X /></button><strong>Nieuw bericht</strong><span aria-hidden="true" /></header>}
     <button type="button" className="composer-avatar" onClick={onProfile} aria-label="Naar mijn profiel"><Avatar profile={profile} size={44} /></button>
+    {fullscreen && <div className="composer-author-name"><Name profile={profile} /></div>}
     <div className="composer-main">
-      <textarea autoFocus={autofocus} value={body} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder="Waar denk je aan?" />
+      <textarea autoFocus={autofocus} value={body} onPointerDown={expandOnMobile} onFocus={expandOnMobile} onChange={(event) => setBody(event.target.value)} maxLength={2000} placeholder="Waar denk je aan?" />
       <LinkPreview text={body} posts={posts} />
       {photoError && <p className="composer-error" role="alert">{photoError}</p>}
       {previews.length > 0 && <div className={`composer-image-grid count-${previews.length}`}>{previews.map((preview, index) => <div className="image-preview" key={preview}><img src={preview} alt={`Voorbeeld upload ${index + 1}`} /><button type="button" className="icon-button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); setPhotoError('') }} aria-label={`Afbeelding ${index + 1} verwijderen`}><X /></button></div>)}</div>}
@@ -256,9 +270,9 @@ export default function App() {
       </aside>
       {mobileMenu && <div className="sidebar-scrim" onClick={() => setMobileMenu(false)} />}
       <main className="content">
-        {view === 'feed' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} onProfile={() => go('profile')} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(item.id, reaction)} onVote={(optionId) => store.votePoll(item.id, optionId)} onEdit={(body) => store.updatePost(item.id, body)} onDelete={() => store.deletePost(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => blockProfile(item.author.id, item.author.fullName)} onToast={setToast} />)}</div>}
+        {view === 'feed' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} onProfile={() => go('profile')} onExpand={() => go('compose')} onPost={post} />{feed.map((item) => <PostCard key={item.id} post={item} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(item.id, reaction)} onVote={(optionId) => store.votePoll(item.id, optionId)} onEdit={(body) => store.updatePost(item.id, body)} onDelete={() => store.deletePost(item.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(item.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(item, caption)} onReport={(reason) => store.submitReport(item.id, reason)} onBlock={() => blockProfile(item.author.id, item.author.fullName)} onToast={setToast} />)}</div>}
         {view === 'post' && <div className="page-stack post-view"><button className="thread-back post-view-back" onClick={() => go('feed')}><ArrowLeft /> Terug naar overzicht</button>{activePost ? <PostCard post={activePost} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(activePost.id, reaction)} onVote={(optionId) => store.votePoll(activePost.id, optionId)} onEdit={(body) => store.updatePost(activePost.id, body)} onDelete={() => store.deletePost(activePost.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(activePost.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(activePost, caption)} onReport={(reason) => store.submitReport(activePost.id, reason)} onBlock={() => blockProfile(activePost.author.id, activePost.author.fullName)} onToast={setToast} /> : <section className="card page-card"><EmptyState icon={<MessageCircle />} title="Bericht niet gevonden" text="Dit bericht bestaat niet of is verwijderd." /></section>}</div>}
-        {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus onProfile={() => go('profile')} onPost={post} /></div>}
+        {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus fullscreen onProfile={() => go('profile')} onClose={() => go('feed')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
         {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpenPost={(postId) => { window.location.hash = `/post/${encodeURIComponent(postId)}` }} onRead={store.markNoticesRead} />}
         {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={activeRecipientId} busy={store.busy} onSelect={(id) => { setActiveRecipientId(id || ''); window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onRead={store.markMessageThreadRead} />}

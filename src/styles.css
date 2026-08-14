@@ -102,6 +102,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .compact { min-height: 38px; padding: 0 15px; }
 
 .composer { padding: 17px; display: flex; gap: 13px; }
+.composer-mobile-header, .composer-author-name { display: none; }
 .composer-avatar { width: 44px; height: 44px; flex: 0 0 auto; border: 0; border-radius: 50%; padding: 0; background: none; cursor: pointer; }
 .composer-avatar:hover { box-shadow: 0 0 0 3px var(--green-soft); }
 .composer-main { flex: 1; min-width: 0; }
@@ -534,6 +535,16 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
   .composer-tools { flex-wrap: wrap; }
   .char-count { display: none; }
   .composer-tools .primary { margin-left: auto; }
+  .composer-fullscreen { position: fixed; z-index: 100; inset: 0; width: 100%; height: 100dvh; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 62px 64px minmax(0, 1fr); column-gap: 12px; overflow: hidden; border: 0; border-radius: 0; background: var(--surface); box-shadow: none; }
+  .composer-fullscreen .composer-mobile-header { grid-column: 1 / -1; display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; border-bottom: 1px solid var(--line); }
+  .composer-fullscreen .composer-mobile-header .icon-button { background: transparent; }
+  .composer-fullscreen .composer-mobile-header strong { text-align: center; font-family: 'Manrope', sans-serif; font-size: 17px; }
+  .composer-fullscreen .composer-avatar, .composer-fullscreen .composer-avatar .avatar { width: 48px !important; height: 48px !important; align-self: center; }
+  .composer-fullscreen .composer-author-name { min-width: 0; display: flex; align-items: center; font-size: 16px; }
+  .composer-fullscreen .composer-main { min-height: 0; grid-column: 1 / -1; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+  .composer-fullscreen textarea { min-height: 220px; max-height: none; flex: 1 0 220px; padding: 15px 0; resize: none; font-size: 17px; }
+  .composer-fullscreen .composer-tools { position: sticky; z-index: 4; bottom: 0; flex: 0 0 auto; margin-top: auto; padding: 12px 0; background: var(--surface); }
+  .composer-fullscreen .privacy-menu { top: auto; bottom: 48px; }
   .post-header { padding: 14px 14px 9px; }
   .post-body { padding: 0 14px; }
   .post-stats { padding: 0 14px; }
@@ -576,6 +587,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
   .card, .search-large { border-left: 0; border-right: 0; border-radius: 0; }
   .composer-tools { display: flex; }
   .composer-tools .primary { margin-left: 0; }
+  .composer-fullscreen .composer-tools .primary { margin-left: auto; }
   .tool-button span { display: none; }
   .people-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .reaction-picker { left: 0; bottom: 44px; max-width: calc(100vw - 14px); }
