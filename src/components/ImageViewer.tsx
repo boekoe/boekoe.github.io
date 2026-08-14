@@ -34,13 +34,13 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
   const scale = useRef(1)
   const moved = useRef(false)
   const slideTimer = useRef<number | null>(null)
+  const recenterFrame = useRef<number | null>(null)
   const zoomRefs = useRef<Record<number, ReactZoomPanPinchContentRef | null>>({})
   const [index, setIndex] = useState(safeInitialIndex)
   const [targetIndex, setTargetIndex] = useState<number | null>(null)
   const [dragX, setDragX] = useState(0)
   const [sliding, setSliding] = useState(false)
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [viewportWidth, setViewportWidth] = useState(() => window.visualViewport?.width || window.innerWidth)
   const [mountedIndices, setMountedIndices] = useState<Set<number>>(() => new Set(neighbourIndices(safeInitialIndex, gallery.length)))
   const [readyIndices, setReadyIndices] = useState<Set<number>>(() => new Set([safeInitialIndex]))
 
@@ -118,13 +118,22 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
 
   useEffect(() => {
     const recenter = () => {
+      if (slideTimer.current !== null) {
+        window.clearTimeout(slideTimer.current)
+        slideTimer.current = null
+      }
+      if (recenterFrame.current !== null) window.cancelAnimationFrame(recenterFrame.current)
       gesture.current = null
       scale.current = 1
       setDragX(0)
       setTargetIndex(null)
       setSliding(false)
-      setViewportWidth(window.visualViewport?.width || window.innerWidth)
-      Object.values(zoomRefs.current).forEach((controls) => controls?.resetTransform(0))
+      recenterFrame.current = window.requestAnimationFrame(() => {
+        recenterFrame.current = window.requestAnimationFrame(() => {
+          Object.values(zoomRefs.current).forEach((controls) => controls?.resetTransform(0))
+          recenterFrame.current = null
+        })
+      })
     }
     window.addEventListener('resize', recenter)
     window.addEventListener('orientationchange', recenter)
@@ -134,6 +143,7 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
       window.removeEventListener('orientationchange', recenter)
       window.visualViewport?.removeEventListener('resize', recenter)
       if (slideTimer.current !== null) window.clearTimeout(slideTimer.current)
+      if (recenterFrame.current !== null) window.cancelAnimationFrame(recenterFrame.current)
     }
   }, [])
 
@@ -166,7 +176,8 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
     const dy = touch.clientY - start.y
     const elapsed = Math.max(1, performance.now() - start.time)
     const horizontal = Math.abs(dx) > Math.abs(dy) * 1.15
-    const committed = horizontal && (Math.abs(dx) > Math.min(90, viewportWidth * .18) || Math.abs(dx) / elapsed > .55)
+    const viewerWidth = event.currentTarget.getBoundingClientRect().width || window.innerWidth
+    const committed = horizontal && (Math.abs(dx) > Math.min(90, viewerWidth * .18) || Math.abs(dx) / elapsed > .55)
     if (committed && dx < 0 && canGoNext) goNext()
     else if (committed && dx > 0 && canGoPrevious) goPrevious()
     else if (Math.abs(dx) > 7) settleAt(index, false)
@@ -180,7 +191,8 @@ export function ImageViewer({ src, alt, images, initialIndex = 0, altForIndex, o
   const displayedIndex = targetIndex ?? index
   const trackStyle = {
     '--gallery-count': gallery.length,
-    '--gallery-offset': `${-displayedIndex * viewportWidth + dragX}px`,
+    '--gallery-offset': `${-displayedIndex * 100 / gallery.length}%`,
+    '--gallery-drag': `${dragX}px`,
   } as React.CSSProperties
 
   return <div

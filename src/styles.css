@@ -487,7 +487,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .message-compose button svg { width: 19px; }
 
 .image-viewer { position: fixed; z-index: 200; inset: 0; overflow: hidden; background: rgba(8, 5, 6, .96); color: white; touch-action: none; }
-.image-viewer-track { --gallery-count: 1; --gallery-offset: 0px; width: calc(var(--gallery-count) * 100%); height: 100%; display: flex; transform: translate3d(var(--gallery-offset), 0, 0); will-change: transform; }
+.image-viewer-track { --gallery-count: 1; --gallery-offset: 0%; --gallery-drag: 0px; width: calc(var(--gallery-count) * 100%); height: 100%; display: flex; transform: translate3d(calc(var(--gallery-offset) + var(--gallery-drag)), 0, 0); will-change: transform; }
 .image-viewer-track.sliding { transition: transform .24s cubic-bezier(.22,.72,.2,1); }
 .image-viewer-track.dragging { transition: none; }
 .image-viewer-slide { width: calc(100% / var(--gallery-count)); height: 100%; flex: 0 0 calc(100% / var(--gallery-count)); display: grid; place-items: center; overflow: hidden; }
