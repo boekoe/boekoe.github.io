@@ -13,6 +13,11 @@ import { ImageViewer } from './components/ImageViewer'
 import { LinkifiedText, LinkPreview, textWithoutPreviewUrl } from './components/LinkPreview'
 import { PostImages } from './components/PostImages'
 import { Messages } from './components/Messages'
+import {
+  defaultNotificationPreferences, disablePush, enablePush, getPushCapability,
+  loadNotificationPreferences, saveNotificationPreferences,
+  type NotificationPreferences, type PushCapability,
+} from './lib/push'
 
 const MOBILE_VIEW_QUERY = '(max-width: 780px), (max-height: 520px) and (pointer: coarse)'
 
@@ -152,11 +157,11 @@ function Discover({ profiles, posts, currentId, following, followers, onFriendAc
   </div>
 }
 
-function Notifications({ notices, following, onFriendAction, onOpenPost, onRead }: { notices: ReturnType<typeof useSocialApp>['notices']; following: string[]; onFriendAction: (id: string) => void; onOpenPost: (postId: string) => void; onRead: () => void }) {
+function Notifications({ notices, following, onFriendAction, onOpen, onRead }: { notices: ReturnType<typeof useSocialApp>['notices']; following: string[]; onFriendAction: (id: string) => void; onOpen: (notice: ReturnType<typeof useSocialApp>['notices'][number]) => void; onRead: () => void }) {
   const readOnce = useRef(false)
   useEffect(() => { if (!readOnce.current) { readOnce.current = true; onRead() } }, [onRead])
   return <section className="card page-card"><div className="page-title"><div><h1>Meldingen</h1><p>Wat er in je community gebeurt</p></div></div>
-    <div className="notice-list">{notices.map((notice) => { const accepted = notice.kind === 'follow' && notice.actor && following.includes(notice.actor.id); const linked = Boolean(notice.postId); const open = () => notice.postId && onOpenPost(notice.postId); return <article className={`notice ${notice.read ? '' : 'unread'} ${linked ? 'linked' : ''}`} key={notice.id} role={linked ? 'link' : undefined} tabIndex={linked ? 0 : undefined} onClick={(event) => { if (!(event.target as HTMLElement).closest('a,button')) open() }} onKeyDown={(event) => { if (linked && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open() } }}>{notice.actor ? <Avatar profile={notice.actor} size={46} /> : <span className="notice-system"><ShieldCheck /></span>}<div>{notice.actor && <Name profile={notice.actor} />} <span>{notice.kind === 'follow' ? accepted ? 'is nu je vriend' : 'wil vrienden worden' : notice.text}</span><small>{timeAgo(notice.createdAt)}</small>{notice.kind === 'follow' && notice.actor && !accepted && <button className="primary request-accept" onClick={() => onFriendAction(notice.actor!.id)}>Verzoek accepteren</button>}</div><span className={`notice-icon ${notice.kind}`}>{notice.kind === 'like' ? <Heart size={16} fill="currentColor" /> : notice.kind === 'comment' ? <MessageCircle size={16} /> : notice.kind === 'follow' ? <UserRoundPlus size={16} /> : <ShieldCheck size={16} />}</span>{linked && <ChevronRight className="notice-arrow" />}</article> })}</div>
+    <div className="notice-list">{notices.map((notice) => { const accepted = notice.kind === 'follow' && notice.actor && following.includes(notice.actor.id); const linked = Boolean(notice.targetUrl || notice.postId); const open = () => linked && onOpen(notice); return <article className={`notice ${notice.read ? '' : 'unread'} ${linked ? 'linked' : ''}`} key={notice.id} role={linked ? 'link' : undefined} tabIndex={linked ? 0 : undefined} onClick={(event) => { if (!(event.target as HTMLElement).closest('a,button')) open() }} onKeyDown={(event) => { if (linked && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open() } }}>{notice.actor ? <Avatar profile={notice.actor} size={46} /> : <span className="notice-system"><ShieldCheck /></span>}<div>{notice.actor && <Name profile={notice.actor} />} <span>{notice.kind === 'follow' ? accepted ? 'is nu je vriend' : 'wil vrienden worden' : notice.text}</span><small>{timeAgo(notice.createdAt)}</small>{notice.kind === 'follow' && notice.actor && !accepted && <button className="primary request-accept" onClick={() => onFriendAction(notice.actor!.id)}>Verzoek accepteren</button>}</div><span className={`notice-icon ${notice.kind}`}>{notice.kind === 'like' ? <Heart size={16} fill="currentColor" /> : notice.kind === 'comment' ? <MessageCircle size={16} /> : notice.kind === 'follow' ? <UserRoundPlus size={16} /> : notice.kind === 'message' ? <MessagesSquare size={16} /> : <ShieldCheck size={16} />}</span>{linked && <ChevronRight className="notice-arrow" />}</article> })}</div>
   </section>
 }
 
@@ -277,7 +282,7 @@ export default function App() {
         {view === 'post' && <div className="page-stack post-view"><button className="thread-back post-view-back" onClick={() => go('feed')}><ArrowLeft /> Terug naar overzicht</button>{activePost ? <PostCard post={activePost} allPosts={store.posts} profiles={allProfiles} currentUserId={profile.id} busy={store.busy} onReaction={(reaction) => store.toggleReaction(activePost.id, reaction)} onVote={(optionId) => store.votePoll(activePost.id, optionId)} onEdit={(body) => store.updatePost(activePost.id, body)} onDelete={() => store.deletePost(activePost.id)} onOpenComments={() => { window.location.hash = `/post/${encodeURIComponent(activePost.id)}/comments` }} onShareProfile={(caption) => shareOnProfile(activePost, caption)} onReport={(reason) => store.submitReport(activePost.id, reason)} onBlock={() => blockProfile(activePost.author.id, activePost.author.fullName)} onToast={setToast} /> : <section className="card page-card"><EmptyState icon={<MessageCircle />} title="Bericht niet gevonden" text="Dit bericht bestaat niet of is verwijderd." /></section>}</div>}
         {view === 'compose' && <div className="page-stack"><Compose profile={profile} posts={store.posts} busy={store.busy} autofocus fullscreen onProfile={() => go('profile')} onClose={() => go('feed')} onPost={post} /></div>}
         {view === 'discover' && <Discover profiles={store.profiles} posts={store.posts} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />}
-        {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpenPost={(postId) => { window.location.hash = `/post/${encodeURIComponent(postId)}` }} onRead={store.markNoticesRead} />}
+        {view === 'notifications' && <Notifications notices={store.notices} following={store.following} onFriendAction={friendAction} onOpen={(notice) => { window.location.hash = notice.targetUrl ? notice.targetUrl.replace(/^#/, '') : notice.postId ? `/post/${encodeURIComponent(notice.postId)}` : '/notifications' }} onRead={store.markNoticesRead} />}
         {view === 'messages' && <Messages current={profile} profiles={allProfiles} messages={store.messages} activeRecipientId={activeRecipientId} busy={store.busy} error={store.error} onSelect={(id) => { setActiveRecipientId(id || ''); window.location.hash = id ? `/messages/${encodeURIComponent(id)}` : '/messages' }} onSend={store.sendMessage} onEdit={store.editMessage} onDelete={store.deleteMessage} onReact={store.toggleMessageReaction} onRead={store.markMessageThreadRead} />}
         {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onEdit={() => setEditing(true)} onSettings={() => setSettingsOpen(true)} onModerate={() => go('moderation')} onLogout={store.signOut} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
@@ -287,16 +292,75 @@ export default function App() {
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
     <nav className="bottom-nav">{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</span></button>)}</nav>
-    {settingsOpen && <SettingsPanel dark={dark} online={store.online} onClose={() => setSettingsOpen(false)} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
+    {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} onClose={() => setSettingsOpen(false)} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
 }
 
-function SettingsPanel({ dark, online, onClose, onToggleTheme, onEditProfile, onLogout, onReset }: { dark: boolean; online: boolean; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onLogout: () => void; onReset: () => void }) {
+function PushSettings({ userId }: { userId: string }) {
+  const [capability, setCapability] = useState<PushCapability | 'loading'>('loading')
+  const [preferences, setPreferences] = useState<NotificationPreferences>(defaultNotificationPreferences)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([getPushCapability(), loadNotificationPreferences(userId)]).then(([nextCapability, nextPreferences]) => {
+      if (!cancelled) { setCapability(nextCapability); setPreferences(nextPreferences) }
+    }).catch(() => { if (!cancelled) setCapability('unsupported') })
+    return () => { cancelled = true }
+  }, [userId])
+
+  const togglePush = async () => {
+    setBusy(true); setError('')
+    try {
+      const enabled = capability === 'subscribed'
+      if (enabled) await disablePush(userId)
+      else await enablePush(userId)
+      const next = { ...preferences, pushEnabled: !enabled }
+      await saveNotificationPreferences(userId, next)
+      setPreferences(next)
+      setCapability(enabled ? 'available' : 'subscribed')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Meldingen konden niet worden aangepast.')
+      setCapability(await getPushCapability())
+    } finally { setBusy(false) }
+  }
+
+  const changePreference = async (key: keyof Omit<NotificationPreferences, 'pushEnabled'>) => {
+    const next = { ...preferences, [key]: !preferences[key] }
+    setPreferences(next); setError('')
+    try { await saveNotificationPreferences(userId, next) }
+    catch { setPreferences(preferences); setError('De meldingsvoorkeur kon niet worden opgeslagen.') }
+  }
+
+  const subscribed = capability === 'subscribed'
+  const status = capability === 'loading' ? 'Status controleren…'
+    : capability === 'ios-install-required' ? 'Installeer Boekoe eerst via Deel → Zet op beginscherm. Open daarna die app om meldingen aan te zetten.'
+    : capability === 'denied' ? 'Meldingen zijn geblokkeerd. Sta ze toe via de instellingen van je telefoon of browser.'
+    : capability === 'unsupported' ? 'Dit apparaat of deze browser ondersteunt geen PWA-meldingen.'
+    : subscribed ? 'Meldingen staan aan op dit apparaat.' : 'Ontvang berichten, reacties en verzoeken als Boekoe gesloten is.'
+
+  const categories: Array<[keyof Omit<NotificationPreferences, 'pushEnabled'>, string]> = [
+    ['messagesEnabled', 'Chatberichten'],
+    ['reactionsEnabled', 'Likes en reacties'],
+    ['commentsEnabled', 'Reacties op berichten'],
+    ['followsEnabled', 'Vriendschapsverzoeken'],
+  ]
+
+  return <section className="push-settings" aria-labelledby="push-settings-title">
+    <div className="push-settings-head"><Bell /><span><strong id="push-settings-title">Pushmeldingen</strong><small>{status}</small></span>{(capability === 'available' || subscribed) && <button type="button" className={`setting-switch ${subscribed ? 'active' : ''}`} role="switch" aria-checked={subscribed} onClick={togglePush} disabled={busy} aria-label={subscribed ? 'Pushmeldingen uitzetten' : 'Pushmeldingen aanzetten'}><span /></button>}</div>
+    {error && <p className="settings-error" role="alert">{error}</p>}
+    {subscribed && <div className="push-categories">{categories.map(([key, label]) => <button type="button" key={key} onClick={() => changePreference(key)} role="switch" aria-checked={preferences[key]}><span>{label}</span><span className={`setting-switch ${preferences[key] ? 'active' : ''}`}><span /></span></button>)}</div>}
+  </section>
+}
+
+function SettingsPanel({ userId, dark, online, onClose, onToggleTheme, onEditProfile, onLogout, onReset }: { userId: string; dark: boolean; online: boolean; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onLogout: () => void; onReset: () => void }) {
   return <Modal title="Instellingen" onClose={onClose}><div className="modal-body settings-panel">
     <button type="button" onClick={onEditProfile}><UserRound /><span><strong>Profiel bewerken</strong><small>Naam, bio en profielfoto aanpassen</small></span><ChevronRight /></button>
     <button type="button" onClick={onToggleTheme}>{dark ? <Sun /> : <Moon />}<span><strong>{dark ? 'Lichte modus' : 'Donkere modus'}</strong><small>De weergave direct omschakelen</small></span><ChevronRight /></button>
+    {online && <PushSettings userId={userId} />}
     {online ? <button type="button" className="danger-text" onClick={onLogout}><LogOut /><span><strong>Uitloggen</strong><small>Dit account op dit apparaat afmelden</small></span><ChevronRight /></button> : <button type="button" onClick={onReset}><MoreHorizontal /><span><strong>Demo herstellen</strong><small>Lokale demogegevens opnieuw instellen</small></span><ChevronRight /></button>}
   </div></Modal>
 }

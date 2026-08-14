@@ -281,6 +281,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .notice-icon { position: absolute; left: 43px; top: 42px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: white; background: var(--green); border: 2px solid var(--surface); }
 .notice-icon.like { background: #d3374f; }
 .notice-icon.comment { background: #3478d4; }
+.notice-icon.message { background: #187f6b; }
 .request-accept { min-height: 34px; margin-top: 9px; padding: 0 12px; font-size: 12px; }
 
 .profile-card { overflow: hidden; }
@@ -386,6 +387,21 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .settings-panel strong { font-size: 14px; }
 .settings-panel small { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .settings-panel > button.danger-text > svg:first-child { color: currentColor; }
+.push-settings { margin: 3px 0; padding: 14px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.push-settings-head { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; align-items: center; gap: 10px; }
+.push-settings-head > svg { width: 21px; margin-inline: auto; color: var(--green); }
+.push-settings-head > span { min-width: 0; display: grid; gap: 3px; }
+.push-settings-head strong { font-size: 14px; }
+.push-settings-head small { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.setting-switch { position: relative; flex: 0 0 auto; width: 44px; height: 26px; padding: 2px; border: 0; border-radius: 999px; background: #a8a8ad; cursor: pointer; transition: background .18s ease; }
+.setting-switch > span { display: block; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.28); transition: transform .18s ease; }
+.setting-switch.active { background: var(--green); }
+.setting-switch.active > span { transform: translateX(18px); }
+.setting-switch:disabled { opacity: .55; cursor: wait; }
+.push-categories { display: grid; gap: 1px; margin: 12px -4px -5px; padding-top: 8px; border-top: 1px solid var(--line); }
+.push-categories > button { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 4px; border: 0; color: var(--text); background: transparent; cursor: pointer; font-size: 12px; font-weight: 700; text-align: left; }
+.push-categories .setting-switch { pointer-events: none; transform: scale(.88); transform-origin: right center; }
+.settings-error { margin: 10px 0 0 48px; color: #c6283d; font-size: 11px; line-height: 1.4; }
 .toast { position: fixed; z-index: 120; bottom: 28px; left: 50%; transform: translateX(-50%); display: flex; gap: 9px; align-items: center; background: #35151c; color: #fff; border-radius: 13px; padding: 12px 16px; box-shadow: 0 14px 40px rgba(0,0,0,.28); font-weight: 600; animation: toast-in .25s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
 

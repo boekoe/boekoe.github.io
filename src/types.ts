@@ -66,8 +66,9 @@ export type PostRevision = {
 
 export type Notice = {
   id: string
-  kind: 'like' | 'comment' | 'follow' | 'system'
+  kind: 'like' | 'comment' | 'follow' | 'message' | 'system'
   postId?: string
+  targetUrl?: string
   actor?: Profile
   text: string
   createdAt: string

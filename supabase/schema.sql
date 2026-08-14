@@ -117,9 +117,10 @@ create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   actor_id uuid references public.profiles(id) on delete cascade,
-  kind text not null check (kind in ('like', 'comment', 'follow', 'system')),
+  kind text not null check (kind in ('like', 'comment', 'follow', 'message', 'system')),
   text text not null check (char_length(text) <= 240),
   post_id uuid references public.posts(id) on delete cascade,
+  target_url text check (target_url is null or target_url ~ '^#/[a-z0-9/_%-]+$'),
   read boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -143,6 +144,31 @@ create table if not exists public.direct_messages (
   )
 );
 
+create table if not exists public.notification_preferences (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  push_enabled boolean not null default true,
+  messages_enabled boolean not null default true,
+  reactions_enabled boolean not null default true,
+  comments_enabled boolean not null default true,
+  follows_enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  expiration_time bigint,
+  user_agent text not null default '',
+  platform text not null default 'web',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_success_at timestamptz
+);
+
 create index if not exists posts_created_at_idx on public.posts(created_at desc);
 create index if not exists posts_user_id_idx on public.posts(user_id);
 create index if not exists post_versions_post_id_idx on public.post_versions(post_id, created_at desc);
@@ -152,6 +178,7 @@ create index if not exists reports_status_idx on public.reports(status, created_
 create index if not exists direct_messages_sender_idx on public.direct_messages(sender_id, created_at desc);
 create index if not exists direct_messages_recipient_idx on public.direct_messages(recipient_id, created_at desc);
 create index if not exists direct_messages_reply_to_idx on public.direct_messages(reply_to) where reply_to is not null;
+create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions(user_id);
 
 create or replace function public.direct_message_reply_matches(message_id uuid, message_sender uuid, message_recipient uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp
@@ -214,12 +241,12 @@ declare target_user uuid;
 begin
   if tg_table_name = 'likes' then
     select user_id into target_user from posts where id = new.post_id;
-    if target_user <> new.user_id then insert into notifications(user_id, actor_id, kind, text, post_id) values(target_user, new.user_id, 'like', 'vindt je bericht leuk', new.post_id); end if;
+    if target_user <> new.user_id then insert into notifications(user_id, actor_id, kind, text, post_id, target_url) values(target_user, new.user_id, 'like', 'vindt je bericht leuk', new.post_id, '#/post/' || new.post_id::text); end if;
   elsif tg_table_name = 'comments' then
     select user_id into target_user from posts where id = new.post_id;
-    if target_user <> new.user_id then insert into notifications(user_id, actor_id, kind, text, post_id) values(target_user, new.user_id, 'comment', 'reageerde op je bericht', new.post_id); end if;
+    if target_user <> new.user_id then insert into notifications(user_id, actor_id, kind, text, post_id, target_url) values(target_user, new.user_id, 'comment', 'reageerde op je bericht', new.post_id, '#/post/' || new.post_id::text || '/comments'); end if;
   elsif tg_table_name = 'follows' then
-    insert into notifications(user_id, actor_id, kind, text) values(new.following_id, new.follower_id, 'follow', 'is je gaan volgen');
+    insert into notifications(user_id, actor_id, kind, text, target_url) values(new.following_id, new.follower_id, 'follow', 'wil vrienden worden', '#/profile/' || (select username from profiles where id = new.follower_id));
   end if;
   return new;
 end;
@@ -231,6 +258,19 @@ drop trigger if exists comments_notify on public.comments;
 create trigger comments_notify after insert on public.comments for each row execute procedure public.create_social_notification();
 drop trigger if exists follows_notify on public.follows;
 create trigger follows_notify after insert on public.follows for each row execute procedure public.create_social_notification();
+
+create or replace function public.create_message_notification()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  insert into public.notifications(user_id, actor_id, kind, text, target_url)
+  values(new.recipient_id, new.sender_id, 'message', 'stuurde je een privébericht', '#/messages/' || new.sender_id::text);
+  return new;
+end;
+$$;
+
+drop trigger if exists direct_messages_notify on public.direct_messages;
+create trigger direct_messages_notify after insert on public.direct_messages for each row execute procedure public.create_message_notification();
 
 -- Row Level Security: the anon key is safe in the web app because every write is checked here.
 alter table public.profiles enable row level security;
@@ -245,7 +285,11 @@ alter table public.blocks enable row level security;
 alter table public.reports enable row level security;
 alter table public.notifications enable row level security;
 alter table public.direct_messages enable row level security;
+alter table public.notification_preferences enable row level security;
+alter table public.push_subscriptions enable row level security;
 grant select, insert on public.direct_messages to authenticated;
+grant select, insert, update on public.notification_preferences to authenticated;
+grant select, insert, update, delete on public.push_subscriptions to authenticated;
 
 create policy "Profiles are visible to signed-in users" on public.profiles for select to authenticated using (
   id = auth.uid() or not exists (select 1 from public.blocks b where (b.blocker_id = auth.uid() and b.blocked_id = profiles.id) or (b.blocker_id = profiles.id and b.blocked_id = auth.uid()))
@@ -299,6 +343,14 @@ create policy "Admins update reports" on public.reports for update to authentica
 
 create policy "Users read notifications" on public.notifications for select to authenticated using (user_id = auth.uid());
 create policy "Users update notifications" on public.notifications for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create policy "Users read own notification preferences" on public.notification_preferences for select to authenticated using (user_id = auth.uid());
+create policy "Users create own notification preferences" on public.notification_preferences for insert to authenticated with check (user_id = auth.uid());
+create policy "Users update own notification preferences" on public.notification_preferences for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "Users read own push subscriptions" on public.push_subscriptions for select to authenticated using (user_id = auth.uid());
+create policy "Users create own push subscriptions" on public.push_subscriptions for insert to authenticated with check (user_id = auth.uid());
+create policy "Users update own push subscriptions" on public.push_subscriptions for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "Users delete own push subscriptions" on public.push_subscriptions for delete to authenticated using (user_id = auth.uid());
 
 create policy "Participants read private messages" on public.direct_messages for select to authenticated using (
   (sender_id = auth.uid() or recipient_id = auth.uid()) and
@@ -407,6 +459,15 @@ begin
     select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'posts'
   ) then
     alter publication supabase_realtime add table public.posts;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications'
+  ) then
+    alter publication supabase_realtime add table public.notifications;
   end if;
 end $$;
 

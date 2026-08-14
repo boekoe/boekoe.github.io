@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import type { DirectMessage, MessageReaction, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
 import { demoMessages, demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
+import { removeCurrentDeviceSubscription } from './push'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
 const REVISION_STORAGE_KEY = 'boekoe-post-revisions-v1'
@@ -185,6 +186,12 @@ export function useSocialApp() {
     writeLocalMessages(userId, loaded)
   }, [])
 
+  const loadNotices = useCallback(async (userId: string) => {
+    if (!supabase) return
+    const result = await supabase.from('notifications').select('*, actor:profiles!notifications_actor_id_fkey(*)').eq('user_id', userId).order('created_at', { ascending: false }).limit(50)
+    if (result.data) setNotices(result.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, targetUrl: row.target_url || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
+  }, [])
+
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
     const client = supabase
@@ -248,7 +255,7 @@ export function useSocialApp() {
     if (profilesRes.data) setProfiles(profilesRes.data.map(rowProfile).filter((person) => !blockedIds.includes(person.id)))
     if (followingRes.data) setFollowing(followingRes.data.map((row: any) => row.following_id))
     if (followersRes.data) setFollowers(followersRes.data.map((row: any) => row.follower_id))
-    if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
+    if (noticesRes.data) setNotices(noticesRes.data.map((row: any) => ({ id: row.id, kind: row.kind, postId: row.post_id || undefined, targetUrl: row.target_url || undefined, actor: row.actor ? rowProfile(row.actor) : undefined, text: row.text, createdAt: row.created_at, read: row.read })))
     if (messagesRes.data) {
       const loaded = await hydrateMessages(messagesRes.data)
       setMessages(loaded); writeLocalMessages(userId, loaded)
@@ -292,6 +299,13 @@ export function useSocialApp() {
     return () => { client.removeChannel(channel) }
   }, [session, loadMessages])
 
+  useEffect(() => {
+    if (!supabase || !session) return
+    const client = supabase
+    const channel = client.channel(`boekoe-notifications-${session.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${session.user.id}` }, () => loadNotices(session.user.id)).subscribe()
+    return () => { client.removeChannel(channel) }
+  }, [session, loadNotices])
+
   const authenticate = async (mode: 'login' | 'signup', email: string, password: string, fullName = '', username = '') => {
     if (!supabase) return { ok: true, message: '' }
     setBusy(true); setError('')
@@ -310,7 +324,11 @@ export function useSocialApp() {
     return { ok: true, message: mode === 'signup' && !result.data.session ? 'Controleer je e-mail om je account te bevestigen.' : '' }
   }
 
-  const signOut = async () => { if (supabase) await supabase.auth.signOut() }
+  const signOut = async () => {
+    if (!supabase) return
+    if (session) await removeCurrentDeviceSubscription(session.user.id)
+    await supabase.auth.signOut()
+  }
 
   const createPost = async (body: string, images: File[] = [], visibility: Post['visibility'] = 'public', pollInput?: { question: string; options: string[] }) => {
     const poll: Poll | undefined = pollInput?.question.trim() && pollInput.options.filter((option) => option.trim()).length >= 2 ? {
