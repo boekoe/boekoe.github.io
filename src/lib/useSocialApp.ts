@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import type { DirectMessage, MessageReaction, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
+import type { AdminBlock, AdminUser, DirectMessage, MessageReaction, Notice, Poll, Post, PostRevision, Profile, ReactionType, Report } from '../types'
 import { demoMessages, demoNotices, demoPosts, demoReports, demoUser, people } from './demo'
 import { hasSupabase, supabase } from './supabase'
+import { uploadMedia } from './media'
 import { removeCurrentDeviceSubscription } from './push'
 
 const STORAGE_KEY = 'boekoe-demo-v1'
@@ -169,6 +170,8 @@ export function useSocialApp() {
   const [notices, setNotices] = useState<Notice[]>(hasSupabase ? [] : initial.notices)
   const [messages, setMessages] = useState<DirectMessage[]>(hasSupabase ? [] : initial.messages)
   const [reports, setReports] = useState<Report[]>(hasSupabase ? [] : initial.reports)
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
+  const [adminBlocks, setAdminBlocks] = useState<AdminBlock[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -272,8 +275,27 @@ export function useSocialApp() {
       setMessages(loaded); writeLocalMessages(userId, loaded)
     } else setMessages(readLocalMessages(userId))
     if (profileRes.data?.is_admin) {
-      const reportsRes = await supabase.from('reports').select('*').order('created_at', { ascending: false })
-      if (reportsRes.data) setReports(reportsRes.data.map((row: any) => ({ id: row.id, reporter: row.reporter_name || 'Gebruiker', reason: row.reason, postId: row.post_id, excerpt: row.details || '', status: row.status, createdAt: row.created_at })))
+      const overviewRes = await supabase.rpc('admin_moderation_overview')
+      if (!overviewRes.error && overviewRes.data) {
+        const overview = overviewRes.data as { users?: any[]; reports?: any[]; blocks?: any[] }
+        setAdminUsers((overview.users || []).map((row) => ({
+          id: row.id, email: row.email || '', username: row.username || '', fullName: row.full_name || 'Boekoe gebruiker',
+          isAdmin: Boolean(row.is_admin), verified: Boolean(row.verified), createdAt: row.created_at, lastSignInAt: row.last_sign_in_at || undefined,
+        })))
+        setReports((overview.reports || []).map((row) => ({
+          id: row.id, reporter: row.reporter || 'Gebruiker', reporterEmail: row.reporter_email || '', reporterUsername: row.reporter_username || '',
+          target: row.target || 'Verwijderde gebruiker', targetEmail: row.target_email || '', targetUsername: row.target_username || '', reason: row.reason,
+          postId: row.post_id, excerpt: row.excerpt || '', status: row.status, createdAt: row.created_at,
+        })))
+        setAdminBlocks((overview.blocks || []).map((row) => ({
+          id: row.id, blocker: row.blocker || 'Verwijderde gebruiker', blockerEmail: row.blocker_email || '', blockerUsername: row.blocker_username || '',
+          blocked: row.blocked || 'Verwijderde gebruiker', blockedEmail: row.blocked_email || '', blockedUsername: row.blocked_username || '',
+          reason: row.reason || 'Geen reden opgegeven', createdAt: row.created_at,
+        })))
+      } else {
+        const reportsRes = await supabase.from('reports').select('*').order('created_at', { ascending: false })
+        if (reportsRes.data) setReports(reportsRes.data.map((row: any) => ({ id: row.id, reporter: row.reporter_name || 'Gebruiker', reason: row.reason, postId: row.post_id, excerpt: row.details || '', status: row.status, createdAt: row.created_at })))
+      }
     }
     setBusy(false)
   }, [])
@@ -349,13 +371,24 @@ export function useSocialApp() {
     if (!profile || !body.trim() && !images.length && !poll) return false
     setBusy(true); setError('')
     if (supabase && session) {
+      const sb = supabase
       const imageUrls: string[] = []
       for (const image of images) {
         const ext = image.name.split('.').pop() || 'jpg'
-        const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`
-        const uploaded = await supabase.storage.from('post-media').upload(path, image)
-        if (uploaded.error) { setError(uploaded.error.message); setBusy(false); return false }
-        imageUrls.push(supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl)
+        try {
+          imageUrls.push(await uploadMedia(image, {
+            userId: session.user.id,
+            accessToken: session.access_token,
+            fallback: async () => {
+              const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`
+              const uploaded = await sb.storage.from('post-media').upload(path, image)
+              if (uploaded.error) throw uploaded.error
+              return sb.storage.from('post-media').getPublicUrl(path).data.publicUrl
+            },
+          }))
+        } catch (uploadError) {
+          setError(uploadError instanceof Error ? uploadError.message : 'Upload mislukt'); setBusy(false); return false
+        }
       }
       const payload = { user_id: session.user.id, body: body.trim(), image_url: imageUrls[0] || null, image_urls: imageUrls, visibility, poll_data: poll || null }
       let result = await supabase.from('posts').insert(payload).select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').single()
@@ -659,13 +692,16 @@ export function useSocialApp() {
     if (supabase && session) await supabase.from('reports').insert({ reporter_id: session.user.id, reporter_name: profile.fullName, post_id: postId, reason, details: target.body.slice(0, 250) })
   }
 
-  const blockUser = async (userId: string) => {
+  const blockUser = async (userId: string, reason = '') => {
     if (!profile || userId === profile.id) return false
     const nextBlocked = [...new Set([...blocked, userId])]
     const nextMessages = messages.filter((message) => message.senderId !== userId && message.recipientId !== userId)
     setBlocked(nextBlocked); setPosts((current) => current.filter((post) => post.author.id !== userId)); setProfiles((current) => current.filter((person) => person.id !== userId)); setFollowing((current) => current.filter((id) => id !== userId)); setFollowers((current) => current.filter((id) => id !== userId)); setMessages(nextMessages); writeLocalMessages(profile.id, nextMessages)
     persist({ blocked: nextBlocked, posts: posts.filter((post) => post.author.id !== userId), following: following.filter((id) => id !== userId), followers: followers.filter((id) => id !== userId), messages: nextMessages })
-    if (supabase && session) await supabase.from('blocks').insert({ blocker_id: session.user.id, blocked_id: userId })
+    if (supabase && session) {
+      const result = await supabase.from('blocks').insert({ blocker_id: session.user.id, blocked_id: userId, reason: reason.trim().slice(0, 500) })
+      if (result.error) { setError(result.error.message); return false }
+    }
     return true
   }
 
@@ -679,10 +715,17 @@ export function useSocialApp() {
         const client = supabase
         const upload = async (file: File, kind: 'avatar' | 'cover') => {
           const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' } as Record<string, string>)[file.type] || 'jpg'
-          const path = `${session.user.id}/profile/${kind}-${crypto.randomUUID()}.${extension}`
-          const result = await client.storage.from('post-media').upload(path, file, { contentType: file.type })
-          if (result.error) throw result.error
-          return client.storage.from('post-media').getPublicUrl(path).data.publicUrl
+          return uploadMedia(file, {
+            userId: session.user.id,
+            subfolder: 'profile',
+            accessToken: session.access_token,
+            fallback: async () => {
+              const path = `${session.user.id}/profile/${kind}-${crypto.randomUUID()}.${extension}`
+              const result = await client.storage.from('post-media').upload(path, file, { contentType: file.type })
+              if (result.error) throw result.error
+              return client.storage.from('post-media').getPublicUrl(path).data.publicUrl
+            },
+          })
         }
         if (media.avatar) avatarUrl = await upload(media.avatar, 'avatar')
         if (media.cover) coverUrl = await upload(media.cover, 'cover')
@@ -737,6 +780,6 @@ export function useSocialApp() {
 
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
-  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, messages, reports, busy, error,
+  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, messages, reports, adminUsers, adminBlocks, busy, error,
     authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }
