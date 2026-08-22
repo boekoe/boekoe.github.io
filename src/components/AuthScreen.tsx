@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { BrandMark } from './ui'
+import { InstallPrompt } from './InstallPrompt'
 
 export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: string; onSubmit: (mode: 'login' | 'signup', email: string, password: string, fullName?: string, username?: string) => Promise<{ ok: boolean; message: string }> }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [show, setShow] = useState(false)
   const [message, setMessage] = useState('')
+  const [installOpen, setInstallOpen] = useState(false)
+  useEffect(() => { setInstallOpen(true) }, [])
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setMessage('')
     const form = new FormData(event.currentTarget)
@@ -24,6 +27,9 @@ export function AuthScreen({ busy, error, onSubmit }: { busy: boolean; error: st
         <button className="primary wide" disabled={busy}>{busy && <LoaderCircle className="spin" />} {mode === 'login' ? 'Inloggen' : 'Gratis account maken'}</button>
       </form>
       <p className="terms">Door verder te gaan accepteer je de communityregels en privacyvoorwaarden van Boekoe.</p>
-    </div></section>
+    </div>
+    <button className="install-open-btn" onClick={() => setInstallOpen(true)}>📲 Installeer de Boekoe-app</button>
+    <InstallPrompt open={installOpen} onClose={() => setInstallOpen(false)} />
+    </section>
   </main>
 }

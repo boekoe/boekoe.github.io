@@ -41,7 +41,7 @@ export function LinkifiedText({ text }: { text: string }) {
 }
 
 function boekoePostId(url: URL) {
-  const ownHost = url.origin === window.location.origin || url.hostname === 'boekoe.github.io'
+  const ownHost = url.origin === window.location.origin || url.hostname === 'boekoe.github.io' || url.hostname === 'boekoe.sr' || url.hostname === 'www.boekoe.sr'
   if (!ownHost) return ''
   const match = url.hash.match(/^#\/post\/([^/]+)/)
   if (!match) return ''
