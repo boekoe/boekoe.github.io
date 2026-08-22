@@ -41,7 +41,7 @@ export async function uploadMedia(
     form.append('file', file)
     form.append('fileName', `${crypto.randomUUID()}.${(file.name.split('.').pop() || 'jpg').toLowerCase()}`)
     form.append('folder', auth.folder)
-    form.append('usePath', 'true')
+    form.append('useUniqueFileName', 'false')
     form.append('token', auth.token)
     form.append('expire', String(auth.expire))
     form.append('signature', auth.signature)
