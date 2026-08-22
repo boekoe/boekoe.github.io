@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ImageViewer } from './ImageViewer'
+import { ikImage, FEED_TRANSFORM } from '../lib/media'
 
 export function PostImages({ urls, authorName, className = '' }: { urls: string[]; authorName: string; className?: string }) {
   const [active, setActive] = useState<number | null>(null)
@@ -8,7 +9,7 @@ export function PostImages({ urls, authorName, className = '' }: { urls: string[
   return <>
     <div className={`post-images count-${Math.min(urls.length, 4)} ${className}`.trim()}>
       {urls.slice(0, 4).map((url, index) => <button type="button" key={`${url}-${index}`} onClick={() => setActive(index)} aria-label={`Afbeelding ${index + 1} openen en inzoomen`}>
-        <img src={url} alt={`Afbeelding ${index + 1} bij bericht van ${authorName}`} loading="lazy" />
+        <img src={ikImage(url, FEED_TRANSFORM)} alt={`Afbeelding ${index + 1} bij bericht van ${authorName}`} loading="lazy" />
         {index === 3 && urls.length > 4 && <span>+{urls.length - 4}</span>}
       </button>)}
     </div>

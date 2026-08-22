@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { CheckCircle2, X } from 'lucide-react'
 import type { Profile } from '../types'
+import { ikImage, AVATAR_TRANSFORM } from '../lib/media'
 
 export function BrandMark({ large = false }: { large?: boolean }) {
   return <img className={`brand-mark${large ? ' large' : ''}`} src="/icon.svg" alt="" aria-hidden="true" />
@@ -9,7 +10,7 @@ export function BrandMark({ large = false }: { large?: boolean }) {
 export function Avatar({ profile, size = 44 }: { profile: Profile; size?: number }) {
   const initials = profile.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)
   return profile.avatarUrl
-    ? <img className="avatar" src={profile.avatarUrl} alt={profile.fullName} width={size} height={size} style={{ width: size, height: size }} />
+    ? <img className="avatar" src={ikImage(profile.avatarUrl, AVATAR_TRANSFORM)} alt={profile.fullName} width={size} height={size} style={{ width: size, height: size }} />
     : <span className="avatar avatar-fallback" style={{ width: size, height: size, fontSize: size * .32 }}>{initials}</span>
 }
 
