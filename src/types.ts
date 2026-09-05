@@ -97,10 +97,38 @@ export type MessageReaction = '👍' | '❤️' | '😂' | '😮' | '😢' | '�
 export type Report = {
   id: string
   reporter: string
+  reporterEmail?: string
+  reporterUsername?: string
+  target?: string
+  targetEmail?: string
+  targetUsername?: string
   reason: string
   postId: string
   excerpt: string
   status: 'open' | 'reviewed' | 'removed'
+  createdAt: string
+}
+
+export type AdminUser = {
+  id: string
+  email: string
+  username: string
+  fullName: string
+  isAdmin: boolean
+  verified: boolean
+  createdAt: string
+  lastSignInAt?: string
+}
+
+export type AdminBlock = {
+  id: string
+  blocker: string
+  blockerEmail?: string
+  blockerUsername?: string
+  blocked: string
+  blockedEmail?: string
+  blockedUsername?: string
+  reason: string
   createdAt: string
 }
 

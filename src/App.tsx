@@ -4,7 +4,7 @@ import {
   Lock, LogOut, Menu, MessageCircle, MessagesSquare, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
   Sparkles, Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
-import type { AppView, Poll, Post, Profile } from './types'
+import type { AdminBlock, AdminUser, AppView, Poll, Post, Profile } from './types'
 import { useSocialApp } from './lib/useSocialApp'
 import { AuthScreen } from './components/AuthScreen'
 import { PostCard } from './components/PostCard'
@@ -15,7 +15,7 @@ import { PostImages } from './components/PostImages'
 import { Messages } from './components/Messages'
 import {
   defaultNotificationPreferences, disablePush, enablePush, getPushCapability,
-  getOpenInChromeUrl, getPushInstallContext, loadNotificationPreferences, saveNotificationPreferences,
+  getOpenInChromeUrl, getPushInstallContext, isPushStandalone, loadNotificationPreferences, saveNotificationPreferences,
   type NotificationPreferences, type PushCapability,
 } from './lib/push'
 
@@ -199,10 +199,22 @@ function CommentPage({ post, profile, busy, onBack, onComment, onToggleLike }: {
   </div>
 }
 
-function Moderation({ reports, onUpdate }: { reports: ReturnType<typeof useSocialApp>['reports']; onUpdate: (id: string, status: 'open' | 'reviewed' | 'removed') => void }) {
-  return <section className="card page-card"><div className="page-title"><div><h1>Moderatie</h1><p>Behandel communitymeldingen zorgvuldig</p></div><span className="admin-badge"><ShieldCheck /> Admin</span></div>
-    <div className="moderation-stats"><div><strong>{reports.filter((item) => item.status === 'open').length}</strong><span>Open</span></div><div><strong>{reports.filter((item) => item.status === 'reviewed').length}</strong><span>Beoordeeld</span></div><div><strong>{reports.filter((item) => item.status === 'removed').length}</strong><span>Verwijderd</span></div></div>
-    <div className="report-list">{reports.map((report) => <article key={report.id}><div className="report-head"><span className={`status ${report.status}`}>{report.status === 'open' ? 'Open' : report.status === 'reviewed' ? 'Beoordeeld' : 'Verwijderd'}</span><small>{timeAgo(report.createdAt)}</small></div><h3>{report.reason}</h3><p>“{report.excerpt}”</p><small>Gemeld door {report.reporter} · Bericht {report.postId.slice(0, 8)}</small><div className="report-actions"><button className="secondary" onClick={() => onUpdate(report.id, 'reviewed')}>Veilig houden</button><button className="danger" onClick={() => onUpdate(report.id, 'removed')}>Bericht verwijderen</button></div></article>)}</div>
+function adminDate(value: string) {
+  return new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function AdminIdentity({ name, username, email }: { name: string; username?: string; email?: string }) {
+  return <div className="admin-identity"><strong>{name}</strong>{username && <small>@{username}</small>}{email && <small>{email}</small>}</div>
+}
+
+function Moderation({ reports, adminUsers, adminBlocks, onUpdate }: { reports: ReturnType<typeof useSocialApp>['reports']; adminUsers: AdminUser[]; adminBlocks: AdminBlock[]; onUpdate: (id: string, status: 'open' | 'reviewed' | 'removed') => void }) {
+  const [tab, setTab] = useState<'reports' | 'blocks' | 'users'>('reports')
+  return <section className="card page-card"><div className="page-title"><div><h1>Adminpanel</h1><p>Accounts, meldingen en blokkades van Boekoe</p></div><span className="admin-badge"><ShieldCheck /> Admin</span></div>
+    <div className="moderation-stats"><div><strong>{adminUsers.length}</strong><span>Accounts</span></div><div><strong>{reports.filter((item) => item.status === 'open').length}</strong><span>Open meldingen</span></div><div><strong>{adminBlocks.length}</strong><span>Blokkades</span></div></div>
+    <div className="admin-tabs" role="tablist"><button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}><Flag /> Meldingen <b>{reports.length}</b></button><button className={tab === 'blocks' ? 'active' : ''} onClick={() => setTab('blocks')}><Ban /> Blokkades <b>{adminBlocks.length}</b></button><button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Users /> Accounts <b>{adminUsers.length}</b></button></div>
+    {tab === 'reports' && <div className="report-list">{reports.length ? reports.map((report) => <article key={report.id}><div className="report-head"><span className={`status ${report.status}`}>{report.status === 'open' ? 'Open' : report.status === 'reviewed' ? 'Beoordeeld' : 'Verwijderd'}</span><small>{timeAgo(report.createdAt)}</small></div><h3>{report.reason}</h3><div className="admin-relation"><AdminIdentity name={report.reporter} username={report.reporterUsername} email={report.reporterEmail} /><span>rapporteerde</span><AdminIdentity name={report.target || 'Verwijderde gebruiker'} username={report.targetUsername} email={report.targetEmail} /></div>{report.excerpt && <p>“{report.excerpt}”</p>}<small>Bericht {report.postId.slice(0, 8)} · {adminDate(report.createdAt)}</small><div className="report-actions"><button className="secondary" onClick={() => onUpdate(report.id, 'reviewed')}>Veilig houden</button><button className="danger" onClick={() => onUpdate(report.id, 'removed')}>Bericht verwijderen</button></div></article>) : <EmptyState icon={<Flag />} title="Geen meldingen" text="Er zijn nog geen communitymeldingen." />}</div>}
+    {tab === 'blocks' && <div className="report-list">{adminBlocks.length ? adminBlocks.map((block) => <article key={block.id}><div className="report-head"><span className="status reviewed">Blokkade</span><small>{timeAgo(block.createdAt)}</small></div><div className="admin-relation"><AdminIdentity name={block.blocker} username={block.blockerUsername} email={block.blockerEmail} /><span>blokkeerde</span><AdminIdentity name={block.blocked} username={block.blockedUsername} email={block.blockedEmail} /></div><p><strong>Reden:</strong> {block.reason || 'Geen reden opgegeven'}</p><small>{adminDate(block.createdAt)}</small></article>) : <EmptyState icon={<Ban />} title="Geen blokkades" text="Er zijn nog geen blokkades geregistreerd." />}</div>}
+    {tab === 'users' && <div className="admin-user-list">{adminUsers.length ? adminUsers.map((user) => <article key={user.id}><div className="admin-user-main"><AdminIdentity name={user.fullName} username={user.username} email={user.email} /><div className="admin-user-badges">{user.isAdmin && <span className="status reviewed">Admin</span>}{user.verified && <span className="status reviewed">Geverifieerd</span>}</div></div><small>Aangemaakt {adminDate(user.createdAt)}{user.lastSignInAt ? ` · laatst actief ${adminDate(user.lastSignInAt)}` : ''}</small></article>) : <EmptyState icon={<Users />} title="Geen accounts" text="De beveiligde accountdirectory is nog niet geladen." />}</div>}
   </section>
 }
 
@@ -226,6 +238,7 @@ export default function App() {
   const feed = useMemo(() => [...store.posts].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)), [store.posts])
   const allProfiles = useMemo(() => store.profile && !store.profiles.some((person) => person.id === store.profile?.id) ? [store.profile, ...store.profiles] : store.profiles, [store.profile, store.profiles])
   const viewedProfile = profileUsername ? allProfiles.find((person) => person.username.toLowerCase() === profileUsername.toLowerCase()) : store.profile
+  const ownProfileOpen = view === 'profile' && viewedProfile?.id === store.profile?.id
 
   useEffect(() => {
     const applyHash = () => {
@@ -267,16 +280,16 @@ export default function App() {
   // Do not persist the close action here: on every reload/visit it must return
   // until push notifications have actually been enabled.
   useEffect(() => {
-    if (!store.online || !store.session?.user.id || !store.profile || view !== 'profile' || profileUsername.toLowerCase() !== store.profile.username.toLowerCase()) return
+    if (!store.online || !store.session?.user.id || !store.profile || !ownProfileOpen) return
     let cancelled = false
     getPushCapability().then((capability) => {
       if (!cancelled && capability !== 'subscribed') setPushPromptMode('profile')
     }).catch(() => undefined)
     return () => { cancelled = true }
-  }, [view, profileUsername, store.online, store.profile?.id, store.profile?.username, store.session?.user.id])
+  }, [ownProfileOpen, store.online, store.profile?.id, store.session?.user.id])
 
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
-  if (store.online && !store.session) return <AuthScreen busy={store.busy} error={store.error} onSubmit={store.authenticate} />
+  if (store.online && (store.passwordRecovery || !store.session)) return <AuthScreen busy={store.busy} passwordRecovery={store.passwordRecovery} onSubmit={store.authenticate} onRequestPasswordReset={store.requestPasswordReset} onUpdatePassword={store.updatePassword} />
   if (!store.profile) return null
   const profile = store.profile
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
@@ -312,7 +325,8 @@ export default function App() {
   }
   const blockProfile = async (id: string, name: string) => {
     if (!window.confirm(`Wil je ${name} blokkeren? Jullie zien elkaars berichten en profielen daarna niet meer.`)) return
-    if (await store.blockUser(id)) { setToast(`${name} is geblokkeerd`); go('feed') }
+    const reason = window.prompt(`Waarom blokkeer je ${name}? (optioneel)`, '') || ''
+    if (await store.blockUser(id, reason)) { setToast(`${name} is geblokkeerd`); go('feed') }
   }
 
   return <div className={`app-shell ${view === 'messages' ? 'messages-view' : ''}`}>
@@ -333,7 +347,7 @@ export default function App() {
         {view === 'profile' && viewedProfile && <ProfilePage profile={viewedProfile} currentId={profile.id} posts={store.posts} following={store.following} followers={store.followers} onFriendAction={friendAction} onMessage={(id) => { window.location.hash = `/messages/${encodeURIComponent(id)}` }} onBlock={(id) => blockProfile(id, viewedProfile.fullName)} onSettings={openSettings} onModerate={() => go('moderation')} online={store.online} onReset={store.resetDemo} />}
         {view === 'profile' && !viewedProfile && <section className="card page-card"><EmptyState icon={<UserRound />} title="Profiel niet gevonden" text="Dit profiel bestaat niet of is niet meer beschikbaar." /></section>}
         {view === 'comments' && <CommentPage post={activePost} profile={profile} busy={store.busy} onBack={() => { window.location.hash = activePostId ? `/post/${encodeURIComponent(activePostId)}` : '/feed' }} onComment={async (body, parentId) => { if (activePostId) { await store.addComment(activePostId, body, parentId); setToast(parentId ? 'Antwoord geplaatst' : 'Reactie geplaatst') } }} onToggleLike={(commentId) => activePostId && store.toggleCommentLike(activePostId, commentId)} />}
-        {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} onUpdate={store.updateReport} />}
+        {view === 'moderation' && profile.isAdmin && <Moderation reports={store.reports} adminUsers={store.adminUsers} adminBlocks={store.adminBlocks} onUpdate={store.updateReport} />}
       </main>
       <Suggestions profiles={store.profiles} currentId={profile.id} following={store.following} followers={store.followers} onFriendAction={friendAction} />
     </div>
@@ -375,21 +389,25 @@ function PushPrompt({ userId, onClose, onEnabled }: { userId: string; onClose: (
   const denied = capability === 'denied'
   const unsupported = capability === 'unsupported'
   const installContext = getPushInstallContext()
-  const title = needsInstall ? 'Zet Boekoe op je beginscherm' : denied ? 'Meldingen zijn geblokkeerd' : unsupported ? 'Meldingen niet beschikbaar' : 'Mis niets van Boekoe'
-  const text = needsInstall ? 'Open deze pagina in Safari, tik op Deel en kies “Zet op beginscherm”. Open daarna Boekoe vanaf je beginscherm om meldingen aan te zetten.'
-    : denied ? 'Sta meldingen toe via de instellingen van je telefoon of browser. Daarna kun je ze hier inschakelen.'
-      : unsupported ? 'Deze browser ondersteunt geen pushmeldingen voor Boekoe.'
-        : 'Ontvang een melding bij nieuwe chatberichten, reacties en vriendschapsverzoeken.'
-  const installHelp = installContext === 'android-chrome'
-    ? 'Voor de beste werking: tik in Chrome op ⋮ → “Installeren” of “Toevoegen aan startscherm” en open daarna Boekoe vanuit het icoon.'
-    : installContext === 'android-other'
-      ? 'Gebruik Chrome voor pushmeldingen: open Boekoe daar en kies in het menu ⋮ → “Installeren” of “Toevoegen aan startscherm”.'
-      : installContext === 'other' && unsupported
-        ? 'Open Boekoe in Chrome en kies in het menu ⋮ → “Installeren” of “Toevoegen aan startscherm”.'
-        : ''
+  const standalone = isPushStandalone()
+  const androidNeedsInstall = (installContext === 'android-chrome' || installContext === 'android-other') && !standalone
+  const title = needsInstall ? 'Installeer Boekoe op je iPhone' : androidNeedsInstall ? 'Installeer Boekoe op Android' : denied ? 'Meldingen zijn geblokkeerd' : unsupported ? 'Meldingen niet beschikbaar' : 'Meldingen inschakelen'
+  const text = needsInstall
+    ? 'Open Boekoe in Safari, tik op Deel en kies “Zet op beginscherm”. Open daarna Boekoe vanaf je beginscherm om meldingen aan te zetten.'
+    : installContext === 'android-chrome' && !standalone
+      ? 'Open in Chrome het menu ⋮ en kies “Installeren” of “Toevoegen aan startscherm”. Open daarna Boekoe vanuit het icoon om meldingen aan te zetten.'
+      : installContext === 'android-other' && !standalone
+        ? 'Open Boekoe in Chrome en kies daar in het menu ⋮ “Installeren” of “Toevoegen aan startscherm”. Open daarna Boekoe vanuit het icoon om meldingen aan te zetten.'
+        : denied ? 'Sta meldingen toe via de instellingen van je telefoon of browser. Daarna kun je ze hier inschakelen.'
+          : unsupported ? 'Deze browser ondersteunt geen pushmeldingen voor Boekoe.'
+            : 'Ontvang een melding bij nieuwe chatberichten, reacties en vriendschapsverzoeken.'
+  const installHelp = installContext === 'other' && unsupported
+    ? 'Open Boekoe in Chrome en kies in het menu ⋮ → “Installeren” of “Toevoegen aan startscherm”.'
+    : ''
   const chromeUrl = installContext === 'android-other' || (installContext === 'other' && unsupported) ? getOpenInChromeUrl() : ''
+  const canEnable = capability === 'available' && !androidNeedsInstall
 
-  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={() => onClose()} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{installHelp && <p className="push-prompt-install-help">{installHelp}</p>}{chromeUrl && <a className="push-prompt-link" href={chromeUrl}>Open Boekoe in Chrome</a>}{error && <p className="push-prompt-error" role="alert">{error}</p>}{capability === 'available' && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
+  return <aside className="push-prompt" aria-live="polite"><button type="button" className="push-prompt-close" onClick={() => onClose()} aria-label="Pushmelding sluiten"><X /></button><Bell className="push-prompt-icon" /><div><strong>{title}</strong><p>{text}</p>{installHelp && <p className="push-prompt-install-help">{installHelp}</p>}{chromeUrl && <a className="push-prompt-link" href={chromeUrl}>Open Boekoe in Chrome</a>}{error && <p className="push-prompt-error" role="alert">{error}</p>}{canEnable && <button type="button" className="primary compact" onClick={enable} disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} /> Aan het inschakelen…</> : <><Bell size={17} /> Meldingen aanzetten</>}</button>}</div></aside>
 }
 
 function PushSettings({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {

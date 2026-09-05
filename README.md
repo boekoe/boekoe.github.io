@@ -68,6 +68,43 @@ Een eigen `.com`- of `.sr`-domein is optioneel en kost doorgaans geld. De hostin
 
 Een native App Store/Play Store-pakket kan later met Capacitor worden gemaakt. De webapp blijft de gratis route; Apple en Google rekenen registratiekosten voor storepublicatie.
 
+## Android-app bouwen met Capacitor
+
+Boekoe gebruikt Capacitor om dezelfde React-app als native Android-app te verpakken. Vereisten: Node.js 22 of nieuwer, Android Studio, Android SDK Platform 36 en Build-Tools 36.0.0.
+
+Na een wijziging aan de webapp synchroniseer je de Android-app met:
+
+```bash
+npm run android:sync
+```
+
+Open het native project in Android Studio met:
+
+```bash
+npm run android:open
+```
+
+Bouw een lokale debug-APK met:
+
+```bash
+npm run android:apk
+```
+
+De APK staat daarna in `android/app/build/outputs/apk/debug/app-debug.apk`. Een debug-APK is geschikt voor lokale tests en wordt automatisch met een debugcertificaat ondertekend. Voor publicatie in Google Play is later een beveiligde release-sleutel en een Android App Bundle (`.aab`) nodig.
+
+## iPhone-app bouwen met Capacitor
+
+De iOS-app gebruikt dezelfde React- en Supabase-code. Vereisten: de volledige Xcode-app, een Apple ID in Xcode en voor een fysieke test een aangesloten iPhone waarop Developer Mode actief is.
+
+Synchroniseer wijzigingen en open het iOS-project met:
+
+```bash
+npm run ios:sync
+npm run ios:open
+```
+
+Kies in Xcode onder **Signing & Capabilities** je persoonlijke Apple-team en selecteer daarna je iPhone als doelapparaat. Met een gratis Apple ID kun je rechtstreeks op je eigen iPhone testen; die tijdelijke ondertekening moet doorgaans na zeven dagen worden vernieuwd. TestFlight en distributie naar anderen vereisen het betaalde Apple Developer Program.
+
 ## Productiechecklist
 
 - Schrijf definitieve communityregels, privacyverklaring en voorwaarden.

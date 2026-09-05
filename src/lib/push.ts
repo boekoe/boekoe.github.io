@@ -24,6 +24,10 @@ export const defaultNotificationPreferences: NotificationPreferences = {
 const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
 
+export function isPushStandalone() {
+  return isStandalone()
+}
+
 export function getPushInstallContext(): PushInstallContext {
   const userAgent = navigator.userAgent
   if (isIos()) return 'ios'

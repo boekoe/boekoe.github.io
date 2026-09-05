@@ -174,6 +174,7 @@ export function useSocialApp() {
   const [adminBlocks, setAdminBlocks] = useState<AdminBlock[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [passwordRecovery, setPasswordRecovery] = useState(() => /(?:^|[&#])type=recovery(?:&|$)/.test(window.location.hash))
 
   const persist = useCallback((next: Partial<DemoState>) => {
     if (hasSupabase) return
@@ -307,9 +308,11 @@ export function useSocialApp() {
       setAuthReady(true)
       if (data.session) loadOnline(data.session)
     })
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'SIGNED_OUT') setPasswordRecovery(false)
       setSession(nextSession)
-      if (nextSession) loadOnline(nextSession)
+      if (nextSession && event !== 'PASSWORD_RECOVERY') loadOnline(nextSession)
       else { setProfile(null); setPosts([]) }
     })
     return () => data.subscription.unsubscribe()
@@ -355,6 +358,32 @@ export function useSocialApp() {
     setBusy(false)
     if (result.error) { setError(result.error.message); return { ok: false, message: result.error.message } }
     return { ok: true, message: mode === 'signup' && !result.data.session ? 'Controleer je e-mail om je account te bevestigen.' : '' }
+  }
+
+  const requestPasswordReset = async (email: string) => {
+    if (!supabase) return { ok: false, message: 'Wachtwoord herstellen is alleen beschikbaar wanneer Boekoe online is.' }
+    setBusy(true); setError('')
+    const result = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+    })
+    setBusy(false)
+    if (result.error) return { ok: false, message: result.error.message }
+    return { ok: true, message: 'Als dit e-mailadres bij Boekoe bekend is, ontvang je zo een resetlink.' }
+  }
+
+  const updatePassword = async (password: string) => {
+    if (!supabase) return { ok: false, message: 'Wachtwoord herstellen is alleen beschikbaar wanneer Boekoe online is.' }
+    setBusy(true); setError('')
+    const result = await supabase.auth.updateUser({ password })
+    if (result.error) {
+      setBusy(false)
+      return { ok: false, message: result.error.message }
+    }
+    setPasswordRecovery(false)
+    await supabase.auth.signOut()
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    setBusy(false)
+    return { ok: true, message: 'Je wachtwoord is gewijzigd. Je kunt nu inloggen.' }
   }
 
   const signOut = async () => {
@@ -780,6 +809,6 @@ export function useSocialApp() {
 
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
-  return { online: hasSupabase, authReady, session, profile, posts, profiles, following, followers, blocked, notices, messages, reports, adminUsers, adminBlocks, busy, error,
-    authenticate, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+  return { online: hasSupabase, authReady, session, passwordRecovery, profile, posts, profiles, following, followers, blocked, notices, messages, reports, adminUsers, adminBlocks, busy, error,
+    authenticate, requestPasswordReset, updatePassword, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

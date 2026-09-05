@@ -8,6 +8,8 @@
   --green: #c6283d;
   --green-2: #a91f32;
   --green-soft: #fde8ec;
+  --success: #18794e;
+  --success-soft: #e7f6ed;
   --yellow: #f4c542;
   --red: #9f1d30;
   --text: #241719;
@@ -31,6 +33,8 @@
   --surface: #2c2e2f;
   --surface-2: #343637;
   --green-soft: #4a151d;
+  --success: #69db9a;
+  --success-soft: #153b29;
   --shadow: 0 10px 35px rgba(0, 0, 0, .55);
 }
 
@@ -493,7 +497,13 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .password button { position: absolute; right: 4px; top: 3px; width: 38px; height: 38px; border: 0; background: none; color: var(--muted); cursor: pointer; }
 .password button svg { width: 19px; }
 .form-error, .form-success { margin: 0; border-radius: 10px; padding: 10px; background: #fae3e6; color: var(--red); font-size: 12px; }
-.form-success { background: var(--green-soft); color: var(--green); }
+.form-success { background: var(--success-soft); color: var(--success); }
+.auth-heading { margin-bottom: 22px; }
+.auth-heading h2 { margin-bottom: 7px; font-size: 22px; }
+.auth-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.auth-link { justify-self: center; border: 0; padding: 0; background: none; color: var(--green); font-size: 12px; font-weight: 700; cursor: pointer; }
+.auth-link-right { justify-self: end; margin-top: -7px; }
+.auth-link:hover { text-decoration: underline; }
 .terms { margin: 17px 0 0; font-size: 10px; color: var(--muted); text-align: center; line-height: 1.5; }
 .install-open-btn { display: block; margin: 13px auto 0; padding: 9px 16px; border: 1px dashed var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 700; cursor: pointer; }
 .install-open-btn:hover { border-color: var(--green); color: var(--green); }

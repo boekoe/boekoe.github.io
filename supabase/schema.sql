@@ -94,12 +94,18 @@ create table if not exists public.follows (
 );
 
 create table if not exists public.blocks (
+  id uuid primary key default gen_random_uuid(),
   blocker_id uuid not null references public.profiles(id) on delete cascade,
   blocked_id uuid not null references public.profiles(id) on delete cascade,
+  reason text not null default '' check (char_length(reason) <= 500),
   created_at timestamptz not null default now(),
-  primary key (blocker_id, blocked_id),
+  unique (blocker_id, blocked_id),
   check (blocker_id <> blocked_id)
 );
+
+alter table public.blocks add column if not exists id uuid default gen_random_uuid();
+alter table public.blocks add column if not exists reason text not null default '';
+create unique index if not exists blocks_id_idx on public.blocks(id);
 
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
@@ -175,6 +181,7 @@ create index if not exists post_versions_post_id_idx on public.post_versions(pos
 create index if not exists comments_post_id_idx on public.comments(post_id, created_at);
 create index if not exists notifications_user_id_idx on public.notifications(user_id, created_at desc);
 create index if not exists reports_status_idx on public.reports(status, created_at desc);
+create index if not exists blocks_created_at_idx on public.blocks(created_at desc);
 create index if not exists direct_messages_sender_idx on public.direct_messages(sender_id, created_at desc);
 create index if not exists direct_messages_recipient_idx on public.direct_messages(recipient_id, created_at desc);
 create index if not exists direct_messages_reply_to_idx on public.direct_messages(reply_to) where reply_to is not null;
@@ -479,6 +486,55 @@ begin
     alter publication supabase_realtime add table public.direct_messages;
   end if;
 end $$;
+
+-- Secure admin directory and moderation overview. E-mail addresses from auth.users
+-- never become public profile data; they are returned only to an authenticated admin.
+create or replace function public.admin_moderation_overview()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+declare result jsonb;
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and is_admin = true) then
+    raise exception 'Adminrechten vereist';
+  end if;
+  select jsonb_build_object(
+    'users', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', u.id, 'email', coalesce(u.email, ''), 'username', coalesce(p.username, ''),
+      'full_name', coalesce(p.full_name, 'Boekoe gebruiker'), 'is_admin', coalesce(p.is_admin, false),
+      'verified', coalesce(p.verified, false), 'created_at', u.created_at, 'last_sign_in_at', u.last_sign_in_at
+    ) order by u.created_at desc) from auth.users u left join public.profiles p on p.id = u.id), '[]'::jsonb),
+    'reports', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', r.id, 'reporter', coalesce(reporter.full_name, r.reporter_name),
+      'reporter_email', coalesce(reporter_auth.email, ''), 'reporter_username', coalesce(reporter.username, ''),
+      'target', coalesce(target.full_name, 'Verwijderde gebruiker'), 'target_email', coalesce(target_auth.email, ''),
+      'target_username', coalesce(target.username, ''), 'reason', r.reason, 'post_id', r.post_id,
+      'excerpt', r.details, 'status', r.status, 'created_at', r.created_at
+    ) order by r.created_at desc) from public.reports r
+      left join public.profiles reporter on reporter.id = r.reporter_id
+      left join auth.users reporter_auth on reporter_auth.id = r.reporter_id
+      left join public.posts reported_post on reported_post.id = r.post_id
+      left join public.profiles target on target.id = reported_post.user_id
+      left join auth.users target_auth on target_auth.id = reported_post.user_id), '[]'::jsonb),
+    'blocks', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', b.id, 'blocker', coalesce(blocker.full_name, 'Verwijderde gebruiker'),
+      'blocker_email', coalesce(blocker_auth.email, ''), 'blocker_username', coalesce(blocker.username, ''),
+      'blocked', coalesce(blocked.full_name, 'Verwijderde gebruiker'), 'blocked_email', coalesce(blocked_auth.email, ''),
+      'blocked_username', coalesce(blocked.username, ''), 'reason', b.reason, 'created_at', b.created_at
+    ) order by b.created_at desc) from public.blocks b
+      left join public.profiles blocker on blocker.id = b.blocker_id
+      left join auth.users blocker_auth on blocker_auth.id = b.blocker_id
+      left join public.profiles blocked on blocked.id = b.blocked_id
+      left join auth.users blocked_auth on blocked_auth.id = b.blocked_id), '[]'::jsonb)
+  ) into result;
+  return result;
+end;
+$$;
+
+revoke all on function public.admin_moderation_overview() from public;
+grant execute on function public.admin_moderation_overview() to authenticated;
 
 -- Optional: make your first account an admin after signing up.
 -- update public.profiles set is_admin = true, verified = true where username = 'jouw_gebruikersnaam';
