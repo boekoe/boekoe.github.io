@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, Ban, BarChart3, Bell, Camera, Check, ChevronDown, ChevronRight, Compass, Flag, Globe2, Heart, Home, Image, LoaderCircle,
+  ArrowLeft, Ban, BarChart3, Bell, Camera, Check, ChevronDown, ChevronRight, Compass, Eye, EyeOff, Flag, Globe2, Heart, Home, Image, LoaderCircle,
   Lock, LogOut, Menu, MessageCircle, MessagesSquare, Moon, MoreHorizontal, Plus, Search, Send, Settings, ShieldCheck,
   Sparkles, Sun, UserRound, UserRoundPlus, Users, X,
 } from 'lucide-react'
@@ -229,6 +229,7 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [editing, setEditing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [pushPromptMode, setPushPromptMode] = useState<'login' | 'profile' | 'settings' | null>(null)
   const [pushSettingsRefresh, setPushSettingsRefresh] = useState(0)
@@ -289,7 +290,7 @@ export default function App() {
   }, [ownProfileOpen, store.online, store.profile?.id, store.session?.user.id])
 
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
-  if (store.online && (store.passwordRecovery || !store.session)) return <AuthScreen busy={store.busy} passwordRecovery={store.passwordRecovery} onSubmit={store.authenticate} onRequestPasswordReset={store.requestPasswordReset} onUpdatePassword={store.updatePassword} />
+  if (store.online && (store.passwordRecovery || !store.session)) return <AuthScreen busy={store.busy} passwordRecovery={store.passwordRecovery} onSignInWithPassword={(email, password) => store.authenticate('login', email, password)} onSendEmailLink={store.requestEmailLink} onUpdatePassword={(password) => store.updatePassword(password, true)} />
   if (!store.profile) return null
   const profile = store.profile
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
@@ -353,7 +354,8 @@ export default function App() {
     </div>
     <nav className="bottom-nav">{nav.filter((item) => !item.compose).map((item) => <button key={item.view} className={view === item.view ? 'active' : ''} onClick={() => go(item.view)} aria-label={item.label} title={item.label}><span><item.icon />{item.view === 'notifications' && unread > 0 && <b>{unread}</b>}{item.view === 'messages' && unreadMessages > 0 && <b>{unreadMessages}</b>}</span></button>)}</nav>
     {pushPromptMode && store.online && <PushPrompt userId={profile.id} onClose={closePushPrompt} onEnabled={() => { if (store.session?.user.id) { localStorage.setItem(`boekoe-push-prompt-seen-${store.session.user.id}`, '1'); localStorage.removeItem(`boekoe-push-prompt-dismissed-${store.session.user.id}`) }; setPushSettingsRefresh((value) => value + 1); setToast('Pushmeldingen staan aan') }} />}
-    {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} pushRefresh={pushSettingsRefresh} onClose={() => { setSettingsOpen(false); if (pushPromptMode === 'settings') setPushPromptMode(null) }} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
+    {settingsOpen && <SettingsPanel userId={profile.id} dark={dark} online={store.online} pushRefresh={pushSettingsRefresh} onClose={() => { setSettingsOpen(false); if (pushPromptMode === 'settings') setPushPromptMode(null) }} onToggleTheme={() => setDark((current) => !current)} onEditProfile={() => { setSettingsOpen(false); setEditing(true) }} onPassword={() => { setSettingsOpen(false); setPasswordOpen(true) }} onLogout={() => { setSettingsOpen(false); store.signOut() }} onReset={() => { setSettingsOpen(false); store.resetDemo() }} />}
+    {passwordOpen && <AccountPasswordPanel busy={store.busy} onClose={() => setPasswordOpen(false)} onSave={(password) => store.updatePassword(password)} />}
     {editing && <EditProfile profile={profile} busy={store.busy} error={store.error} onClose={() => setEditing(false)} onSave={async (changes, media) => { const ok = await store.updateProfile(changes, media); if (ok) { setEditing(false); window.location.hash = `/profile/${encodeURIComponent(changes.username || profile.username)}`; setToast('Profiel bijgewerkt') } return ok }} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
@@ -468,13 +470,39 @@ function PushSettings({ userId, refreshKey = 0 }: { userId: string; refreshKey?:
   </section>
 }
 
-function SettingsPanel({ userId, dark, online, pushRefresh, onClose, onToggleTheme, onEditProfile, onLogout, onReset }: { userId: string; dark: boolean; online: boolean; pushRefresh: number; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onLogout: () => void; onReset: () => void }) {
+function SettingsPanel({ userId, dark, online, pushRefresh, onClose, onToggleTheme, onEditProfile, onPassword, onLogout, onReset }: { userId: string; dark: boolean; online: boolean; pushRefresh: number; onClose: () => void; onToggleTheme: () => void; onEditProfile: () => void; onPassword: () => void; onLogout: () => void; onReset: () => void }) {
   return <Modal title="Instellingen" onClose={onClose}><div className="modal-body settings-panel">
     <button type="button" onClick={onEditProfile}><UserRound /><span><strong>Profiel bewerken</strong><small>Naam, bio en profielfoto aanpassen</small></span><ChevronRight /></button>
+    {online && <button type="button" onClick={onPassword}><Lock /><span><strong>Wachtwoord instellen</strong><small>Maak of wijzig het wachtwoord van je account</small></span><ChevronRight /></button>}
     <button type="button" onClick={onToggleTheme}>{dark ? <Sun /> : <Moon />}<span><strong>{dark ? 'Lichte modus' : 'Donkere modus'}</strong><small>De weergave direct omschakelen</small></span><ChevronRight /></button>
     {online && <PushSettings userId={userId} refreshKey={pushRefresh} />}
     {online ? <button type="button" className="danger-text" onClick={onLogout}><LogOut /><span><strong>Uitloggen</strong><small>Dit account op dit apparaat afmelden</small></span><ChevronRight /></button> : <button type="button" onClick={onReset}><MoreHorizontal /><span><strong>Demo herstellen</strong><small>Lokale demogegevens opnieuw instellen</small></span><ChevronRight /></button>}
   </div></Modal>
+}
+
+function AccountPasswordPanel({ busy, onClose, onSave }: { busy: boolean; onClose: () => void; onSave: (password: string) => Promise<{ ok: boolean; message: string }> }) {
+  const [show, setShow] = useState(false)
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFeedback(null)
+    const data = new FormData(event.currentTarget)
+    const password = String(data.get('password'))
+    if (password !== String(data.get('passwordConfirmation'))) {
+      setFeedback({ ok: false, message: 'De wachtwoorden komen niet overeen.' })
+      return
+    }
+    setFeedback(await onSave(password))
+  }
+
+  return <Modal title="Wachtwoord instellen" onClose={onClose}><form className="modal-body edit-form account-password-form" onSubmit={submit} autoComplete="on">
+    <p className="settings-intro">Je kunt blijven inloggen met een e-maillink. Met een wachtwoord krijg je er een extra inlogoptie bij.</p>
+    <label>Nieuw wachtwoord<div className="password"><input name="password" type={show ? 'text' : 'password'} autoComplete="new-password" minLength={8} required placeholder="Minimaal 8 tekens" /><button type="button" onClick={() => setShow((current) => !current)} aria-label={show ? 'Verberg wachtwoord' : 'Toon wachtwoord'}>{show ? <EyeOff /> : <Eye />}</button></div></label>
+    <label>Herhaal wachtwoord<input name="passwordConfirmation" type={show ? 'text' : 'password'} autoComplete="new-password" minLength={8} required placeholder="Herhaal je wachtwoord" /></label>
+    {feedback && <p role={feedback.ok ? 'status' : 'alert'} className={feedback.ok ? 'form-success' : 'form-error'}>{feedback.message}</p>}
+    <div className="form-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Annuleren</button><button className="primary" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={18} /> Opslaan…</> : 'Wachtwoord opslaan'}</button></div>
+  </form></Modal>
 }
 
 function EditProfile({ profile, busy, error, onClose, onSave }: { profile: Profile; busy: boolean; error: string; onClose: () => void; onSave: (changes: Partial<Profile>, media: { avatar: File | null; cover: File | null }) => Promise<boolean> }) {

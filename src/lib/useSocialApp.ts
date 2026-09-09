@@ -360,6 +360,21 @@ export function useSocialApp() {
     return { ok: true, message: mode === 'signup' && !result.data.session ? 'Controleer je e-mail om je account te bevestigen.' : '' }
   }
 
+  const requestEmailLink = async (email: string) => {
+    if (!supabase) return { ok: false, message: 'Inloggen via e-mail is alleen beschikbaar wanneer Boekoe online is.' }
+    setBusy(true); setError('')
+    const result = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        shouldCreateUser: true,
+      },
+    })
+    setBusy(false)
+    if (result.error) { setError(result.error.message); return { ok: false, message: result.error.message } }
+    return { ok: true, message: 'De link is verstuurd. Je kunt dit venster open laten.' }
+  }
+
   const requestPasswordReset = async (email: string) => {
     if (!supabase) return { ok: false, message: 'Wachtwoord herstellen is alleen beschikbaar wanneer Boekoe online is.' }
     setBusy(true); setError('')
@@ -371,7 +386,7 @@ export function useSocialApp() {
     return { ok: true, message: 'Als dit e-mailadres bij Boekoe bekend is, ontvang je zo een resetlink.' }
   }
 
-  const updatePassword = async (password: string) => {
+  const updatePassword = async (password: string, signOutAfter = false) => {
     if (!supabase) return { ok: false, message: 'Wachtwoord herstellen is alleen beschikbaar wanneer Boekoe online is.' }
     setBusy(true); setError('')
     const result = await supabase.auth.updateUser({ password })
@@ -380,10 +395,12 @@ export function useSocialApp() {
       return { ok: false, message: result.error.message }
     }
     setPasswordRecovery(false)
-    await supabase.auth.signOut()
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    if (signOutAfter) {
+      await supabase.auth.signOut()
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    }
     setBusy(false)
-    return { ok: true, message: 'Je wachtwoord is gewijzigd. Je kunt nu inloggen.' }
+    return { ok: true, message: signOutAfter ? 'Je wachtwoord is gewijzigd. Je kunt nu inloggen.' : 'Je wachtwoord is opgeslagen.' }
   }
 
   const signOut = async () => {
@@ -810,5 +827,5 @@ export function useSocialApp() {
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
   return { online: hasSupabase, authReady, session, passwordRecovery, profile, posts, profiles, following, followers, blocked, notices, messages, reports, adminUsers, adminBlocks, busy, error,
-    authenticate, requestPasswordReset, updatePassword, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+    authenticate, requestEmailLink, requestPasswordReset, updatePassword, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

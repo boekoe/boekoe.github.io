@@ -4,7 +4,7 @@ Boekoe is een mobile-first Surinaamse community-app. Hij werkt direct als intera
 
 ## Online versie
 
-De productieversie staat op [https://boekoe.github.io/](https://boekoe.github.io/). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
+De productieversie staat op [https://boekoe.sr/](https://boekoe.sr/). De frontend draait gratis op GitHub Pages; accounts, database, foto's en live updates draaien op de gratis Supabase-laag.
 
 ## Wat werkt
 
@@ -45,6 +45,18 @@ VITE_SUPABASE_ANON_KEY=...
 7. Maak na registratie een beheerder met de laatste, uitgecommentarieerde SQL-regel in `schema.sql`.
 
 De anon key mag in frontendcode staan; de meegestuurde Row Level Security-policies beschermen alle persoonsgegevens en schrijfacties. Deel nooit de `service_role` key.
+
+## Inloggen en nieuwe accounts
+
+Boekoe vraagt eerst alleen om het e-mailadres. Daarna kan een gebruiker een veilige inloglink aanvragen of, als die al een wachtwoord heeft ingesteld, met het wachtwoord inloggen. Supabase maakt via dezelfde inloglink automatisch een account aan wanneer het e-mailadres nog niet bekend is. De gebruiker komt na het openen van de link direct binnen.
+
+Voor een nieuw account maakt de databasetrigger automatisch een tijdelijke gebruikersnaam op basis van het e-mailadres en gebruikt hij `Boekoe gebruiker` als naam. Beide kunnen daarna bij **Profiel > Instellingen > Profiel bewerken** worden aangepast. Bij **Profiel > Instellingen > Wachtwoord instellen** kan een gebruiker die via een link binnenkwam later optioneel een wachtwoord maken.
+
+Stel in Supabase onder **Authentication > URL Configuration** de Site URL in op `https://boekoe.sr` en voeg `https://boekoe.sr/**` toe aan de toegestane Redirect URLs. Pas onder **Authentication > Email Templates > Magic Link** de afzendertekst en Boekoe-huisstijl aan.
+
+## Social login later activeren
+
+Supabase ondersteunt social login via onder meer Google, Apple en Facebook, maar iedere provider vereist een eigen ontwikkelaarsapp, client-ID en geheim. Richt eerst de gewenste provider in bij Google, Apple of Meta, zet die daarna aan onder **Supabase > Authentication > Providers**, en voeg de callback-URL toe die Supabase daar toont. Daarna kan de frontend `signInWithOAuth` gebruiken. Totdat die providergegevens zijn ingericht toont Boekoe bewust geen social-knoppen die nog niet werken.
 
 ## Gratis deployen op Cloudflare Pages
 
