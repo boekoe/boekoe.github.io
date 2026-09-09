@@ -200,11 +200,24 @@ export function useSocialApp() {
   const loadOnline = useCallback(async (activeSession: Session) => {
     if (!supabase) return
     const client = supabase
-    setBusy(true)
+    setBusy(true); setError('')
     const userId = activeSession.user.id
     let pollVoterProfiles: Profile[] = []
-    const [profileRes, feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes, messagesRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
+    const profileRes = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+    let profileRow = profileRes.data
+    if (!profileRow) {
+      const ensured = await client.rpc('ensure_my_profile')
+      if (ensured.error || !ensured.data) {
+        console.error('Boekoe profile initialization failed', profileRes.error, ensured.error)
+        setError('Je account is bevestigd, maar je profiel kon nog niet worden klaargezet. Probeer het opnieuw.')
+        setBusy(false)
+        return
+      }
+      profileRow = ensured.data
+    }
+    setProfile(rowProfile(profileRow))
+
+    const [feedRes, profilesRes, followingRes, followersRes, blocksRes, noticesRes, messagesRes] = await Promise.all([
       supabase.from('posts').select('*, author:profiles!posts_user_id_fkey(*), likes(user_id), comments(*, author:profiles!comments_user_id_fkey(*))').order('created_at', { ascending: false }).limit(50),
       supabase.from('profiles').select('*').limit(50),
       supabase.from('follows').select('following_id').eq('follower_id', userId),
@@ -213,7 +226,6 @@ export function useSocialApp() {
       supabase.from('notifications').select('*, actor:profiles!notifications_actor_id_fkey(*)').eq('user_id', userId).order('created_at', { ascending: false }).limit(50),
       supabase.from('direct_messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order('created_at', { ascending: true }).limit(500),
     ])
-    if (profileRes.data) setProfile(rowProfile(profileRes.data))
     if (feedRes.data) {
       const localRevisions = readLocalRevisions()
       const localMedia = readLocalMedia()
@@ -275,7 +287,7 @@ export function useSocialApp() {
       const loaded = await hydrateMessages(messagesRes.data)
       setMessages(loaded); writeLocalMessages(userId, loaded)
     } else setMessages(readLocalMessages(userId))
-    if (profileRes.data?.is_admin) {
+    if (profileRow.is_admin) {
       const overviewRes = await supabase.rpc('admin_moderation_overview')
       if (!overviewRes.error && overviewRes.data) {
         const overview = overviewRes.data as { users?: any[]; reports?: any[]; blocks?: any[] }
@@ -312,7 +324,8 @@ export function useSocialApp() {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (event === 'SIGNED_OUT') setPasswordRecovery(false)
       setSession(nextSession)
-      if (nextSession && event !== 'PASSWORD_RECOVERY') loadOnline(nextSession)
+      setAuthReady(true)
+      if (nextSession && event !== 'PASSWORD_RECOVERY') window.setTimeout(() => loadOnline(nextSession), 0)
       else { setProfile(null); setPosts([]) }
     })
     return () => data.subscription.unsubscribe()
@@ -407,6 +420,11 @@ export function useSocialApp() {
     if (!supabase) return
     if (session) await removeCurrentDeviceSubscription(session.user.id)
     await supabase.auth.signOut()
+  }
+
+  const retryProfile = async () => {
+    if (!session) return
+    await loadOnline(session)
   }
 
   const createPost = async (body: string, images: File[] = [], visibility: Post['visibility'] = 'public', pollInput?: { question: string; options: string[] }) => {
@@ -827,5 +845,5 @@ export function useSocialApp() {
   const resetDemo = () => { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(REVISION_STORAGE_KEY); localStorage.removeItem(MEDIA_STORAGE_KEY); localStorage.removeItem(EXTRAS_STORAGE_KEY); localStorage.removeItem(PRIVATE_POSTS_STORAGE_KEY); localStorage.removeItem(messageStorageKey(profile?.id || 'me')); location.reload() }
 
   return { online: hasSupabase, authReady, session, passwordRecovery, profile, posts, profiles, following, followers, blocked, notices, messages, reports, adminUsers, adminBlocks, busy, error,
-    authenticate, requestEmailLink, requestPasswordReset, updatePassword, signOut, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
+    authenticate, requestEmailLink, requestPasswordReset, updatePassword, signOut, retryProfile, createPost, updatePost, deletePost, toggleReaction, votePoll, addComment, toggleCommentLike, toggleFollow, sendMessage, editMessage, deleteMessage, toggleMessageReaction, markMessageThreadRead, submitReport, blockUser, updateProfile, markNoticesRead, updateReport, resetDemo }
 }

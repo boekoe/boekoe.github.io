@@ -291,7 +291,21 @@ export default function App() {
 
   if (!store.authReady) return <div className="loading-screen"><BrandMark large /><LoaderCircle className="spin" /></div>
   if (store.online && (store.passwordRecovery || !store.session)) return <AuthScreen busy={store.busy} passwordRecovery={store.passwordRecovery} onSignInWithPassword={(email, password) => store.authenticate('login', email, password)} onSendEmailLink={store.requestEmailLink} onUpdatePassword={(password) => store.updatePassword(password, true)} />
-  if (!store.profile) return null
+  if (!store.profile) return <main className="account-loading-screen">
+    <section className="account-loading-card" aria-live="polite">
+      <BrandMark large />
+      {store.busy ? <>
+        <LoaderCircle className="spin" />
+        <h1>Je account wordt klaargezet</h1>
+        <p>Even geduld. We maken je Boekoe-profiel gereed.</p>
+      </> : <>
+        <h1>Je profiel kon niet worden geopend</h1>
+        <p>{store.error || 'Je bent wel ingelogd, maar je profiel is nog niet beschikbaar.'}</p>
+        <button className="primary" type="button" onClick={() => store.retryProfile()}><LoaderCircle /> Opnieuw proberen</button>
+        <button className="secondary" type="button" onClick={() => store.signOut()}><LogOut /> Uitloggen</button>
+      </>}
+    </section>
+  </main>
   const profile = store.profile
   const activePost = activePostId ? store.posts.find((item) => item.id === activePostId) : undefined
   const openSettings = () => {

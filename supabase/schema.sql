@@ -202,6 +202,21 @@ $$;
 revoke all on function public.direct_message_reply_matches(uuid, uuid, uuid) from public;
 grant execute on function public.direct_message_reply_matches(uuid, uuid, uuid) to authenticated;
 
+-- Generate a short, valid and collision-resistant username from an e-mail address.
+create or replace function public.profile_username(user_email text, user_id uuid)
+returns text language plpgsql immutable set search_path = public
+as $$
+declare
+  username_base text;
+begin
+  username_base := left(regexp_replace(lower(coalesce(split_part(user_email, '@', 1), 'user')), '[^a-z0-9_.]', '', 'g'), 21);
+  if char_length(username_base) < 3 then username_base := 'user'; end if;
+  return username_base || '_' || substr(user_id::text, 1, 8);
+end;
+$$;
+
+revoke all on function public.profile_username(text, uuid) from public;
+
 -- Automatically create a safe profile for every new account.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public
@@ -209,17 +224,47 @@ as $$
 declare
   requested_username text;
 begin
-  requested_username := regexp_replace(lower(coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1))), '[^a-z0-9_.]', '', 'g');
-  if char_length(requested_username) < 3 then requested_username := 'user_' || substr(new.id::text, 1, 8); end if;
-  if exists (select 1 from public.profiles where username = requested_username) then requested_username := requested_username || '_' || substr(new.id::text, 1, 5); end if;
+  requested_username := public.profile_username(new.email, new.id);
   insert into public.profiles (id, username, full_name)
-  values (new.id, requested_username, left(coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Boekoe gebruiker'), 80));
+  values (new.id, requested_username, left(coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), 'Boekoe gebruiker'), 80))
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
+
+-- Repair accounts whose profile was not created and let the signed-in user retry safely.
+create or replace function public.ensure_my_profile()
+returns public.profiles language plpgsql security definer set search_path = public
+as $$
+declare
+  auth_user auth.users%rowtype;
+  result public.profiles%rowtype;
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  select * into result from public.profiles where id = auth.uid();
+  if found then return result; end if;
+
+  select * into auth_user from auth.users where id = auth.uid();
+  if not found then raise exception 'Account not found'; end if;
+
+  insert into public.profiles (id, username, full_name)
+  values (
+    auth_user.id,
+    public.profile_username(auth_user.email, auth_user.id),
+    left(coalesce(nullif(auth_user.raw_user_meta_data ->> 'full_name', ''), 'Boekoe gebruiker'), 80)
+  )
+  on conflict (id) do nothing;
+
+  select * into result from public.profiles where id = auth.uid();
+  return result;
+end;
+$$;
+
+revoke all on function public.ensure_my_profile() from public;
+grant execute on function public.ensure_my_profile() to authenticated;
 
 -- Keep follower counters correct without trusting the browser.
 create or replace function public.update_follow_counts()

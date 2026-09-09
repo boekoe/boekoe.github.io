@@ -550,6 +550,13 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 20px; color: var(--green); }
+.account-loading-screen { min-height: 100dvh; padding: 24px; display: grid; place-items: center; background: var(--background); }
+.account-loading-card { width: min(430px,100%); padding: 34px; display: grid; justify-items: center; gap: 13px; border: 1px solid var(--line); border-top: 4px solid var(--red); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.account-loading-card > svg { width: 28px; height: 28px; color: var(--red); }
+.account-loading-card .brand-mark { width: 62px; height: 62px; }
+.account-loading-card h1 { margin: 4px 0 0; font-size: 22px; }
+.account-loading-card p { margin: 0 0 5px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.account-loading-card button { width: 100%; }
 .bottom-nav { display: none; }
 
 .thread-card { overflow: hidden; }
