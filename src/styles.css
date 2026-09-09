@@ -521,12 +521,28 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .install-card h2 { margin: 5px 0 4px; font-size: 19px; letter-spacing: -.02em; }
 .install-intro { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .install-qr { flex: 0 0 auto; padding: 9px; border-radius: 13px; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
-.install-site-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; color: var(--green); font-weight: 800; text-decoration: none; }
-.install-site-link svg { width: 15px; }
 .install-direct { margin-top: 11px; min-height: 40px; }
-.install-steps { counter-reset: step; margin: 13px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; font-size: 12.5px; }
-.install-steps li { position: relative; padding-left: 32px; min-height: 24px; display: grid; align-content: center; }
-.install-steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 12px; font-weight: 800; }
+.install-browser-badge { width: fit-content; margin-top: 13px; display: flex; align-items: center; gap: 9px; padding: 6px 11px 6px 7px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--text); font-size: 12px; font-weight: 800; }
+.install-browser-logo { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #f4f5f7; color: var(--green); }
+.install-browser-logo svg, .install-browser-logo img { width: 20px; height: 20px; display: block; }
+.install-browser-safari .install-browser-logo { background: #e8f4ff; color: #087cf0; }
+.install-browser-chrome .install-browser-logo { background: #eaf2ff; color: #4285f4; }
+.install-browser-firefox .install-browser-logo { background: #fff0e9; color: #e66000; }
+.install-browser-edge .install-browser-logo { background: #e5f8f5; color: #0b927c; }
+.install-browser-samsung .install-browser-logo { background: #ecebff; color: #4338ca; }
+.install-steps { counter-reset: install-step; margin: 13px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; text-align: left; font-size: 12.5px; }
+.install-steps li { counter-increment: install-step; min-height: 34px; display: grid; grid-template-columns: 35px 1fr; align-items: center; gap: 9px; line-height: 1.35; }
+.install-step-icon { position: relative; width: 35px; height: 35px; display: grid; place-items: center; border: 1px solid #d9e4de; border-radius: 10px; background: #fff; color: var(--green); box-shadow: 0 2px 7px rgba(16,45,31,.07); }
+.install-step-icon::after { content: counter(install-step); position: absolute; top: -5px; right: -5px; width: 15px; height: 15px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #fff; font-size: 9px; font-weight: 900; }
+.install-step-icon svg { width: 19px; height: 19px; stroke-width: 2.2; }
+.install-step-icon-page-menu svg { width: 20px; }
+.install-step-icon-share { color: #087cf0; }
+.install-step-icon-add-home, .install-step-icon-add { color: #147d48; }
+.safari-routes { margin-top: 13px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.install-route { padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: #f9fbfa; }
+.install-route > strong { display: block; font-size: 12.5px; }
+.install-route > p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.install-route .install-steps { margin-top: 10px; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 20px; color: var(--green); }
@@ -793,6 +809,7 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
   .auth-brand p { font-size: 15px; margin-bottom: 12px; }
   .install-card { width: 100%; display: block; padding: 16px; }
   .install-qr { display: none; }
+  .safari-routes { grid-template-columns: 1fr; }
   .auth-card { width: 100%; min-width: 0; padding: 20px; }
   .modal-backdrop { padding: 0; align-items: end; }
   .modal { width: 100%; max-height: calc(94dvh - env(safe-area-inset-top)); border-radius: 22px 22px 0 0; border-bottom: 0; }
