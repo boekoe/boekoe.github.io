@@ -543,6 +543,10 @@ h1, h2, h3, .wordmark { font-family: 'Manrope', sans-serif; }
 .install-route > strong { display: block; font-size: 12.5px; }
 .install-route > p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .install-route .install-steps { margin-top: 10px; }
+.safari-toolbar-key { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.safari-toolbar-key > span { display: inline-flex; align-items: center; gap: 4px; }
+.safari-toolbar-icon { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--green); }
+.safari-toolbar-icon svg { width: 14px; height: 14px; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 20px; color: var(--green); }

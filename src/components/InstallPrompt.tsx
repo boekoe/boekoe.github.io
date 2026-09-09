@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   Download,
+  Ellipsis,
   EllipsisVertical,
   List,
   Menu,
@@ -16,7 +17,7 @@ import samsungInternetLogo from '../assets/browser-icons/samsung-internet.svg'
 const SITE_URL = 'https://boekoe.sr'
 
 type Browser = 'safari' | 'chrome' | 'firefox' | 'edge' | 'samsung' | 'other'
-type StepIcon = 'page-menu' | 'share' | 'more' | 'menu' | 'add-home' | 'toggle' | 'add'
+type StepIcon = 'page-menu' | 'share' | 'more' | 'more-horizontal' | 'menu' | 'add-home' | 'toggle' | 'add'
 type InstallStep = { icon: StepIcon; text: string }
 type InstallEnv = {
   kind: 'desktop' | 'mobile'
@@ -40,6 +41,7 @@ const stepIcons: Record<StepIcon, ComponentType<{ 'aria-hidden'?: boolean }>> = 
   'page-menu': List,
   share: Share,
   more: EllipsisVertical,
+  'more-horizontal': Ellipsis,
   menu: Menu,
   'add-home': SquarePlus,
   toggle: ToggleRight,
@@ -113,8 +115,12 @@ function SafariInstructions() {
     <section className="install-route">
       <strong>Nieuwe Safari</strong>
       <p>Met de compacte adresbalk:</p>
+      <div className="safari-toolbar-key" aria-label="Knoppen in de nieuwe Safari-balk">
+        <span><span className="safari-toolbar-icon"><List aria-hidden /></span>Paginamenu links</span>
+        <span><span className="safari-toolbar-icon"><Ellipsis aria-hidden /></span>Meer rechts</span>
+      </div>
       <Steps steps={[
-        { icon: 'page-menu', text: 'Tik links naast de adresbalk op het paginamenu' },
+        { icon: 'more-horizontal', text: 'Tik rechts naast de adresbalk op “Meer”' },
         { icon: 'share', text: 'Tik op “Deel”' },
         { icon: 'add-home', text: 'Kies “Zet op beginscherm”' },
         { icon: 'toggle', text: 'Zet “Open als webapp” aan' },
